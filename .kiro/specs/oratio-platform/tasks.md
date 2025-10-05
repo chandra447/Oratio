@@ -36,7 +36,7 @@
   - Reference design tokens and styles from frontend/public/design/dashboard.html and landing.html
   - _Requirements: 1.1, 1.2_
 
-- [ ] 1.4.1 Install and configure required shadcn/ui components
+- [x] 1.4.1 Install and configure required shadcn/ui components
   - Install shadcn/ui components: button, card, badge, avatar, input, label, separator, scroll-area, skeleton
   - Install Lucide React for consistent iconography (npm install lucide-react)
   - Configure components to use Oratio design tokens by default
