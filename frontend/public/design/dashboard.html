@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<title>Oratio Dashboard</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1A244B",
+                        "secondary": "#FFB76B",
+                        "accent": "#8A3FFC",
+                        "background-light": "#F7F7F9",
+                        "background-dark": "#101010",
+                        "surface-light": "#FFFFFF",
+                        "surface-dark": "#1C1C1E",
+                        "text-light": "#1A244B",
+                        "text-dark": "#FFFFFF",
+                        "subtle-light": "#646B87",
+                        "subtle-dark": "#A0AEC0",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "1.5rem",
+                        "xl": "2rem",
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'glow': '0 0 20px 5px rgba(255, 183, 107, 0.3), 0 0 10px 2px rgba(138, 63, 252, 0.2)',
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .oratio-corner {
+            border-bottom-right-radius: 2rem;
+        }
+        .oratio-corner-top-left {
+            border-top-left-radius: 2rem;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-text-light dark:text-text-dark">
+<div class="relative flex min-h-screen">
+<nav class="fixed top-8 left-8 z-50 bg-surface-light/80 dark:bg-surface-dark/80 backdrop-blur-lg p-4 rounded-lg shadow-lg flex flex-col items-center space-y-8">
+<div class="w-12 h-12 bg-primary flex items-center justify-center rounded-full oratio-corner">
+<svg class="feather feather-wind" fill="none" height="24" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path></svg>
+</div>
+<div class="space-y-6">
+<a class="block p-3 bg-primary/20 dark:bg-primary/30 rounded-lg group hover:shadow-glow transition-all duration-300" href="#">
+<svg class="text-primary dark:text-secondary" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+</a>
+<a class="block p-3 rounded-lg group hover:bg-primary/10 dark:hover:bg-primary/20 hover:shadow-glow transition-all duration-300" href="#">
+<svg class="text-subtle-light dark:text-subtle-dark group-hover:text-primary dark:group-hover:text-secondary" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><rect height="18" rx="2" ry="2" width="18" x="3" y="3"></rect><line x1="3" x2="21" y1="9" y2="9"></line><line x1="9" x2="9" y1="21" y2="9"></line></svg>
+</a>
+<a class="block p-3 rounded-lg group hover:bg-primary/10 dark:hover:bg-primary/20 hover:shadow-glow transition-all duration-300" href="#">
+<svg class="text-subtle-light dark:text-subtle-dark group-hover:text-primary dark:group-hover:text-secondary" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+</a>
+<a class="block p-3 rounded-lg group hover:bg-primary/10 dark:hover:bg-primary/20 hover:shadow-glow transition-all duration-300" href="#">
+<svg class="text-subtle-light dark:text-subtle-dark group-hover:text-primary dark:group-hover:text-secondary" fill="none" height="24" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+</a>
+</div>
+<button class="w-12 h-12 bg-secondary flex items-center justify-center rounded-full oratio-corner-top-left hover:shadow-glow transition-shadow duration-300">
+<svg class="feather feather-plus" fill="none" height="24" stroke="#1A244B" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg>
+</button>
+</nav>
+<main class="flex-1 ml-32 p-8">
+<header class="flex justify-between items-center mb-12">
+<div>
+<h1 class="text-4xl font-bold text-text-light dark:text-text-dark">Agents</h1>
+<p class="text-subtle-light dark:text-subtle-dark mt-2">Confident, elegant, and forward-thinking agents at your command.</p>
+</div>
+<div class="relative">
+<input class="w-80 pl-12 pr-4 py-3 bg-surface-light dark:bg-surface-dark border-2 border-primary/20 dark:border-primary/30 rounded-lg focus:ring-2 focus:ring-secondary focus:border-transparent outline-none transition-all duration-300 oratio-corner-top-left" placeholder="Search agents..." type="search"/>
+<div class="absolute left-4 top-1/2 -translate-y-1/2 text-subtle-light dark:text-subtle-dark">
+<svg class="feather feather-search" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="20" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y1="21" y2="16.65"></line></svg>
+</div>
+</div>
+</header>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<div class="bg-surface-light dark:bg-surface-dark rounded-lg p-6 flex flex-col space-y-4 group hover:-translate-y-2 transition-transform duration-300 oratio-corner shadow-md hover:shadow-xl hover:shadow-secondary/20">
+<div class="flex items-center space-x-4">
+<div class="relative w-16 h-16">
+<img class="w-16 h-16 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKKFN88O8jnxQXniLwB7RtKkIuDlVAFgpQx-g_EUfJ3_UQkw3xJIHC28tgO9-oocYtYmpjiTVEggH18DNAVD0YK9Y26I8RxlaN54n4vSyFGQS-kHq99ORGlDxqoT9hrMniBNwQ5-vBXENLNxtFKWgp91eg0WrE_5lh2fF9mbXAS7naVfjvzOQ9cVuE8jU37VKbVAuooENtGuLVRIEXYfIGMpugZuHnQOXvUpKc2WCHZcG_PSwZLd8__nYpwR0EBCvcHmxjcUn5r8g"/>
+<div class="absolute inset-0 rounded-full border-2 border-secondary opacity-0 group-hover:opacity-100 transition-opacity duration-300 animate-pulse"></div>
+<img class="absolute -bottom-2 -right-2 w-8 h-8 opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKKFN88O8jnxQXniLwB7RtKkIuDlVAFgpQx-g_EUfJ3_UQkw3xJIHC28tgO9-oocYtYmpjiTVEggH18DNAVD0YK9Y26I8RxlaN54n4vSyFGQS-kHq99ORGlDxqoT9hrMniBNwQ5-vBXENLNxtFKWgp91eg0WrE_5lh2fF9mbXAS7naVfjvzOQ9cVuE8jU37VKbVAuooENtGuLVRIEXYfIGMpugZuHnQOXvUpKc2WCHZcG_PSwZLd8__nYpwR0EBCvcHmxjcUn5r8g"/>
+</div>
+<div>
+<h3 class="font-bold text-xl text-text-light dark:text-text-dark">Agent Alpha</h3>
+<span class="text-xs font-semibold uppercase tracking-wider bg-green-200 text-green-800 px-2 py-1 rounded-full">Active</span>
+</div>
+</div>
+<p class="text-subtle-light dark:text-subtle-dark text-sm">Customer support specialist with a focus on empathetic problem-solving. Fluent in 3 languages.</p>
+<div class="flex-grow"></div>
+<div class="flex justify-between items-center pt-4 border-t border-background-light dark:border-surface-dark/50">
+<div class="text-sm text-subtle-light dark:text-subtle-dark">
+<span class="font-semibold">Last Session:</span> 2h ago
+                    </div>
+<button class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transform hover:scale-105 transition-all duration-200 oratio-corner-top-left">
+                        View Details
+                    </button>
+</div>
+</div>
+<div class="bg-surface-light dark:bg-surface-dark rounded-lg p-6 flex flex-col space-y-4 group hover:-translate-y-2 transition-transform duration-300 oratio-corner shadow-md hover:shadow-xl hover:shadow-secondary/20">
+<div class="flex items-center space-x-4">
+<div class="relative w-16 h-16">
+<img class="w-16 h-16 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKKFN88O8jnxQXniLwB7RtKkIuDlVAFgpQx-g_EUfJ3_UQkw3xJIHC28tgO9-oocYtYmpjiTVEggH18DNAVD0YK9Y26I8RxlaN54n4vSyFGQS-kHq99ORGlDxqoT9hrMniBNwQ5-vBXENLNxtFKWgp91eg0WrE_5lh2fF9mbXAS7naVfjvzOQ9cVuE8jU37VKbVAuooENtGuLVRIEXYfIGMpugZuHnQOXvUpKc2WCHZcG_PSwZLd8__nYpwR0EBCvcHmxjcUn5r8g"/>
+<div class="absolute inset-0 rounded-full border-2 border-secondary opacity-0 group-hover:opacity-100 transition-opacity duration-300 animate-pulse"></div>
+<img class="absolute -bottom-2 -right-2 w-8 h-8 opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-300" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKKFN88O8jnxQXniLwB7RtKkIuDlVAFgpQx-g_EUfJ3_UQkw3xJIHC28tgO9-oocYtYmpjiTVEggH18DNAVD0YK9Y26I8RxlaN54n4vSyFGQS-kHq99ORGlDxqoT9hrMniBNwQ5-vBXENLNxtFKWgp91eg0WrE_5lh2fF9mbXAS7naVfjvzOQ9cVuE8jU37VKbVAuooENtGuLVRIEXYfIGMpugZuHnQOXvUpKc2WCHZcG_PSwZLd8__nYpwR0EBCvcHmxjcUn5r8g"/>
+</div>
+<div>
+<h3 class="font-bold text-xl text-text-light dark:text-text-dark">Agent Beta</h3>
+<span class="text-xs font-semibold uppercase tracking-wider bg-green-200 text-green-800 px-2 py-1 rounded-full">Active</span>
+</div>
+</div>
+<p class="text-subtle-light dark:text-subtle-dark text-sm">Technical sales agent skilled in complex product demonstrations and lead qualification.</p>
+<div class="flex-grow"></div>
+<div class="flex justify-between items-center pt-4 border-t border-background-light dark:border-surface-dark/50">
+<div class="text-sm text-subtle-light dark:text-subtle-dark">
+<span class="font-semibold">Last Session:</span> 1d ago
+                    </div>
+<button class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-opacity-90 transform hover:scale-105 transition-all duration-200 oratio-corner-top-left">
+                        View Details
+                    </button>
+</div>
+</div>
+<div class="border-2 border-dashed border-primary/40 dark:border-primary/60 rounded-lg p-6 flex flex-col items-center justify-center text-center group hover:border-secondary dark:hover:border-secondary hover:bg-primary/5 dark:hover:bg-primary/10 transition-all duration-300 oratio-corner cursor-pointer">
+<div class="w-16 h-16 rounded-full bg-primary/20 dark:bg-primary/30 flex items-center justify-center mb-4 group-hover:scale-110 group-hover:shadow-glow transition-all duration-300">
+<svg class="text-primary dark:text-secondary" fill="none" height="32" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="32" xmlns="http://www.w3.org/2000/svg"><line x1="12" x2="12" y1="5" y2="19"></line><line x1="5" x2="19" y1="12" y2="12"></line></svg>
+</div>
+<h3 class="font-bold text-xl text-text-light dark:text-text-dark">Create New Agent</h3>
+<p class="text-subtle-light dark:text-subtle-dark text-sm mt-1">Build and configure a new voice agent from scratch.</p>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>
