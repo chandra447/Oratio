@@ -3,78 +3,21 @@
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { motion } from "framer-motion"
-import { useEffect, useRef } from "react"
+import { WavyBackground } from "@/components/ui/wavy-background"
 
 export function HeroSection() {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-
-    // Set canvas size
-    const resizeCanvas = () => {
-      canvas.width = canvas.offsetWidth * window.devicePixelRatio
-      canvas.height = canvas.offsetHeight * window.devicePixelRatio
-      ctx.scale(window.devicePixelRatio, window.devicePixelRatio)
-    }
-    resizeCanvas()
-    window.addEventListener("resize", resizeCanvas)
-
-    // Wave animation
-    let animationFrameId: number
-    let time = 0
-
-    const drawWave = (offset: number, amplitude: number, frequency: number, opacity: number) => {
-      ctx.beginPath()
-      const width = canvas.offsetWidth
-      const height = canvas.offsetHeight
-      const centerY = height / 2
-
-      for (let x = 0; x < width; x++) {
-        const y = centerY + Math.sin((x * frequency + time + offset) * 0.01) * amplitude
-        if (x === 0) {
-          ctx.moveTo(x, y)
-        } else {
-          ctx.lineTo(x, y)
-        }
-      }
-
-      ctx.strokeStyle = `rgba(59, 130, 246, ${opacity})`
-      ctx.lineWidth = 2
-      ctx.stroke()
-    }
-
-    const animate = () => {
-      ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight)
-
-      // Draw multiple waves with different properties
-      drawWave(0, 20, 0.5, 0.3)
-      drawWave(100, 30, 0.7, 0.2)
-      drawWave(200, 25, 0.6, 0.25)
-
-      time += 2
-      animationFrameId = requestAnimationFrame(animate)
-    }
-
-    animate()
-
-    return () => {
-      window.removeEventListener("resize", resizeCanvas)
-      cancelAnimationFrame(animationFrameId)
-    }
-  }, [])
-
   return (
-    <section className="relative overflow-hidden border-b border-border/40 bg-background py-20 md:py-32">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-
-      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full opacity-40" />
-
-      <div className="container relative mx-auto px-4 md:px-6">
+    <WavyBackground
+      className="mx-auto max-w-7xl"
+      containerClassName="relative overflow-hidden border-b border-border/40"
+      colors={["#3b82f6", "#2563eb", "#1d4ed8", "#1e40af", "#60a5fa"]}
+      waveWidth={50}
+      backgroundFill="black"
+      blur={10}
+      speed="fast"
+      waveOpacity={0.5}
+    >
+      <div className="container relative mx-auto px-4 py-20 md:px-6 md:py-32">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -105,22 +48,20 @@ export function HeroSection() {
             </Button>
           </div>
 
-          <p className="mt-6 text-sm text-muted-foreground">
-            No credit card required • Deploy in minutes • Enterprise support available
-          </p>
+      
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="mx-auto mt-16 max-w-5xl"
+          className="mx-auto mt-4 max-w-5xl"
         >
           <div className="relative rounded-xl border border-border bg-card/50 p-2 shadow-2xl backdrop-blur">
             <img src="dashboard.png" alt="Oratio Dashboard - Manage AI Agents" className="w-full rounded-lg" />
           </div>
         </motion.div>
       </div>
-    </section>
+    </WavyBackground>
   )
 }
