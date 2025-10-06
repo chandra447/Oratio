@@ -20,9 +20,6 @@ class AuthConstruct(Construct):
                 email=cognito.StandardAttribute(required=True, mutable=True),
                 fullname=cognito.StandardAttribute(required=True, mutable=True),
             ),
-            custom_attributes={
-                "organizationName": cognito.StringAttribute(mutable=True),
-            },
             password_policy=cognito.PasswordPolicy(
                 min_length=8,
                 require_lowercase=True,
