@@ -21,21 +21,30 @@ export function Header() {
             >
               Features
             </Link>
-           
+            <Link
+              href="#use-cases"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Use Cases
+            </Link>
             <Link
               href="#"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
-              Dashboard
+              Documentation
             </Link>
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="ghost" className="hidden md:inline-flex">
-            Log in
-          </Button>
-          <Button className="bg-accent text-accent-foreground hover:bg-accent/90">Get Started</Button>
+          <Link href="/login">
+            <Button variant="ghost" className="hidden md:inline-flex">
+              Log in
+            </Button>
+          </Link>
+          <Link href="/signup">
+            <Button className="bg-accent text-accent-foreground hover:bg-accent/90">Get Started</Button>
+          </Link>
           <Button variant="ghost" size="icon" className="md:hidden">
             <Menu className="h-5 w-5" />
           </Button>
