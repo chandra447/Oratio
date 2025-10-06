@@ -44,9 +44,8 @@
   - Ensure all components support dark mode with Oratio dark color palette
   - _Requirements: 1.1, 1.2_
 
-- [ ] 1.5 Create landing page with Oratio design system
-  - Build landing page at frontend/src/app/page.tsx following frontend/public/design/landing.html structure
-  - Use Oratio logo from frontend/public/oratio_light.png for light mode and frontend/public/oratio_dark.png for dark mode in header and footer
+- [x] 1.5 Create landing page with Oratio design system
+  - Build landing page at frontend/src/app/page.tsx
   - Implement hero section with animated blob backgrounds using CSS animations and gradient text effects
   - Create "How Oratio Works" section with three-column grid, icon-based workflow steps, and connecting line
   - Add "See Oratio in Action" video section with aspect-video container, play button overlay, and hover effects
