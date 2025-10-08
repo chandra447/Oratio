@@ -100,3 +100,25 @@ class DatabaseConstruct(Construct):
             sort_key=dynamodb.Attribute(name="status", type=dynamodb.AttributeType.STRING),
             projection_type=dynamodb.ProjectionType.ALL,
         )
+
+        # Knowledge Bases table
+        self.knowledge_bases_table = dynamodb.Table(
+            self,
+            "KnowledgeBasesTable",
+            table_name="oratio-knowledgebases",
+            partition_key=dynamodb.Attribute(
+                name="knowledgeBaseId", type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.RETAIN,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+        )
+
+        # Add GSI for querying by userId
+        self.knowledge_bases_table.add_global_secondary_index(
+            index_name="userId-index",
+            partition_key=dynamodb.Attribute(name="userId", type=dynamodb.AttributeType.STRING),
+            projection_type=dynamodb.ProjectionType.ALL,
+        )

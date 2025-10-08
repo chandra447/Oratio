@@ -30,6 +30,7 @@ class OratioStack(Stack):
             self,
             "Compute",
             agents_table=database.agents_table,
+            knowledge_bases_table=database.knowledge_bases_table,
             kb_bucket=storage.kb_bucket,
             code_bucket=storage.code_bucket,
         )
@@ -40,8 +41,15 @@ class OratioStack(Stack):
             "Workflow",
             kb_provisioner=compute.kb_provisioner,
             agentcreator_invoker=compute.agentcreator_invoker,
+            code_checker=compute.code_checker,
             agentcore_deployer=compute.agentcore_deployer,
         )
+
+        # Grant Step Functions permission to invoke lambdas
+        compute.kb_provisioner.grant_invoke(workflow.state_machine)
+        compute.agentcreator_invoker.grant_invoke(workflow.state_machine)
+        compute.code_checker.grant_invoke(workflow.state_machine)
+        compute.agentcore_deployer.grant_invoke(workflow.state_machine)
 
         # Export important resources for reference
         self.database = database
