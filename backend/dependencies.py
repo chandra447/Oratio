@@ -7,8 +7,15 @@ import logging
 
 from backend.utils.jwt_utils import jwt_validator
 from backend.services.auth_service import AuthService
+from backend.services.agent_service import AgentService
+from backend.services.knowledge_base_service import KnowledgeBaseService
+from backend.services.s3_service import S3Service
 from backend.aws.cognito_client import CognitoClient
+from backend.aws.dynamodb_client import DynamoDBClient
+from backend.aws.s3_client import S3Client
+from backend.aws.stepfunctions_client import StepFunctionsClient
 from backend.models.user import UserProfile
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 

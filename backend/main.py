@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from backend.routers import auth
+from backend.routers import agents, auth
 
 app = FastAPI(
     title="Oratio API",
@@ -20,6 +20,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(agents.router)
 
 
 @app.get("/")

@@ -275,16 +275,33 @@ The agent creation workflow is orchestrated by Step Functions:
 **Voice Service Architecture**:
 ```python
 class VoiceService:
+    """
+    WebSocket-based voice service using Nova Sonic bidirectional streaming.
+    Similar to sonic_example.py but multi-tenant with API key auth.
+    """
     def __init__(self):
-        self.nova_sonic = NovaSonicClient()
+        self.bedrock_stream_manager = BedrockStreamManager()
         self.agentcore = AgentCoreClient()
         
     async def handle_websocket(websocket, agent_id, api_key):
-        # Authenticate API key
-        # Create session
-        # Initialize audio streaming
-        # Process audio loop
-        # Save transcript and recording
+        # 1. Authenticate API key and validate agent ownership
+        # 2. Retrieve agent's generated prompt.md from S3
+        # 3. Create session in DynamoDB
+        # 4. Initialize BedrockStreamManager with Nova Sonic
+        # 5. Send system prompt from prompt.md to Nova Sonic
+        # 6. Start bidirectional audio streaming:
+        #    - Client → WebSocket → Nova Sonic (audio input)
+        #    - Nova Sonic → WebSocket → Client (audio output)
+        # 7. When Nova Sonic needs business logic:
+        #    - Invoke agent_file.py via AgentCore
+        #    - Return result to Nova Sonic
+        # 8. Save transcript and recording to S3
+        # 9. Update session in DynamoDB
+        
+    # Key components from sonic_example.py:
+    # - BedrockStreamManager: Handles bidirectional streaming
+    # - AudioStreamer: Manages audio input/output
+    # - RxPy Subjects: Event-driven audio processing
 ```
 
 **Text Service Architecture**:
@@ -300,6 +317,32 @@ class TextService:
         # Check handoff conditions
         # Return response with sources
 ```
+
+### Resource Tagging Strategy
+
+All AWS resources created dynamically are tagged for cost tracking and resource identification:
+
+**S3 Objects**:
+- `userId`: Owner of the resource
+- `agentId`: Associated agent (for agent-specific files)
+- `resourceType`: Type of resource (knowledge-base, generated-code, recording)
+
+**Bedrock Knowledge Bases**:
+- `userId`: Owner of the knowledge base
+- `platform`: "oratio"
+- `environment`: "production" | "staging" | "development"
+
+**AgentCore Agents**:
+- `userId`: Owner of the agent
+- `agentId`: Unique agent identifier
+- `platform`: "oratio"
+- `environment`: "production" | "staging" | "development"
+
+This tagging strategy enables:
+- Cost allocation by user and agent
+- Resource discovery and auditing
+- Automated cleanup and lifecycle management
+- Compliance and governance tracking
 
 ## Data Models
 
@@ -317,6 +360,20 @@ class User:
     subscription_tier: str
 ```
 
+### KnowledgeBase Model
+```python
+@dataclass
+class KnowledgeBase:
+    knowledge_base_id: str
+    user_id: str
+    s3_path: str
+    bedrock_knowledge_base_id: str
+    status: Literal['notready','ready','error']  # notready|ready|error
+    folder_file_descriptions: Dict  # {folder/file path: description}
+    created_at: int
+    updated_at: int
+```
+
 ### Agent Model
 ```python
 @dataclass
@@ -326,19 +383,19 @@ class Agent:
     agent_name: str
     agent_type: str  # voice|text|both
     sop: str
-    voice_config: Dict
-    text_config: Dict
     knowledge_base_id: str
-    knowledge_base_arn: str
+    knowledge_base_description: str  # When to use knowledge base
+    human_handoff_description: str  # When to escalate to human
+    bedrock_knowledge_base_arn: str
     agentcore_agent_id: str
     agentcore_agent_arn: str
-    human_handoff_enabled: bool
-    human_handoff_conditions: List[str]
+    generated_prompt_s3_path: str  # Path to prompt.md in S3 (for voice agents)
+    agent_code_s3_path: str  # Path to agent_file.py in S3 (Strands agent)
     status: Literal['creating','active','failed','paused']  # creating|active|failed|paused
     created_at: int
     updated_at: int
-    websocket_url: str
-    api_endpoint: str
+    websocket_url: str  # wss://voice.oratio.io/ws/{agentId}
+    api_endpoint: str  # https://api.oratio.io/chat/{agentId}
 ```
 
 ### Session Model

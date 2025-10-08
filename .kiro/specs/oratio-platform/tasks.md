@@ -25,7 +25,7 @@
   - Set up Step Functions state machine definition
   - _Requirements: 11.1, 12.1, 12.2_
 
-- [ ] 1.4 Configure Oratio design system in shadcn/ui and Tailwind
+- [x] 1.4 Configure Oratio design system in shadcn/ui and Tailwind
   - Update frontend/tailwind.config.ts with Oratio color palette (primary: #1A244B, secondary: #FFB76B, accent: #8A3FFC, background-light: #F7F7F9, background-dark: #101010, surface-light: #FFFFFF, surface-dark: #1C1C1E, text-light: #1A244B, text-dark: #FFFFFF, subtle-light: #646B87, subtle-dark: #A0AEC0)
   - Configure custom border radius values for Oratio arch motif (DEFAULT: 1rem, lg: 1.5rem, xl: 2rem, full: 9999px)
   - Add custom box-shadow for glowing effects (glow: '0 0 20px 5px rgba(255, 183, 107, 0.3), 0 0 10px 2px rgba(138, 63, 252, 0.2)')
@@ -102,51 +102,130 @@
   - Implement agent CRUD operations
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
 
-- [ ] 3.1 Create agent data models and services
-  - Implement Agent model with comprehensive validation
-  - Create AgentService for agent operations
-  - Set up DynamoDB table operations for agents
-  - _Requirements: 2.1, 8.1, 8.2_
+- [x] 3.1 Update DynamoDB schema for agents and knowledge bases
+  - Add oratio-knowledgebases table to infrastructure/cdk_constructs/database.py with fields: knowledgeBaseId (PK), userId (for GSI), s3Path, bedrockKnowledgeBaseId, status, folderFileDescriptions, createdAt, updatedAt
+  - Add GSI on userId for querying user's knowledge bases
+  - Update agents table schema documentation to include: knowledgeBaseId, sop, knowledgeBaseDescription, humanHandoffDescription, generatedPrompt, agentCodeS3Path, status
+  - Deploy CDK changes to create new table
+  - _Requirements: 2.1, 2.2, 12.1_
 
-- [ ] 3.2 Implement document upload and S3 integration
-  - Create document upload handler with validation
-  - Implement S3 client for secure file operations
-  - Set up tenant-isolated S3 bucket structure
-  - _Requirements: 2.2, 12.1_
+- [x] 3.2 Create backend data models
+  - Create backend/models/knowledge_base.py with KnowledgeBase model (knowledgeBaseId, userId, s3Path, bedrockKnowledgeBaseId, status, folderFileDescriptions as nested dict, createdAt, updatedAt)
+  - Create backend/models/agent.py with Agent model including all fields: agentId, userId, agentName, agentType, sop, knowledgeBaseId, knowledgeBaseDescription, humanHandoffDescription, bedrockKnowledgeBaseArn, agentcoreAgentId, agentcoreAgentArn, generatedPromptS3Path (path to prompt.md), agentCodeS3Path (path to agent_file.py), status, createdAt, updatedAt, websocketUrl, apiEndpoint
+  - Add Pydantic validation for all fields with proper types
+  - Create enums for status fields (AgentStatus: creating|active|failed|paused, KnowledgeBaseStatus: notready|ready|error)
+  - Note: voiceConfig and textConfig removed - voice agents use generated prompt.md, text agents use agent_file.py directly
+  - _Requirements: 2.1, 8.1_
 
-- [ ] 3.3 Build Step Functions orchestration workflow
-  - Create Step Functions state machine for agent creation
-  - Implement KB Provisioner Lambda function
-  - Implement AgentCreator Invoker Lambda function
-  - Implement AgentCore Deployer Lambda function
+- [ ] 3.3 Create AWS client wrappers with tagging support
+  - Create backend/aws/s3_client.py with methods: upload_file (with userId and agentId tags), upload_folder, get_file, list_files
+  - Create backend/aws/dynamodb_client.py with methods for agents and knowledge bases tables: put_item, get_item, query_by_user, update_item
+  - Create backend/aws/bedrock_client.py with create_knowledge_base method (with userId tag), create_data_source, start_ingestion_job
+  - Create backend/aws/stepfunctions_client.py with start_execution method
+  - Ensure all AWS resource creation includes proper tags (userId, agentId where applicable)
+  - _Requirements: 2.2, 2.3, 12.1, 12.2_
+
+- [x] 3.4 Create backend services for agent and knowledge base operations
+  - Create backend/services/knowledge_base_service.py with methods: create_knowledge_base (creates DynamoDB entry with status="notready"), update_status, get_knowledge_base, list_user_knowledge_bases
+  - Create backend/services/agent_service.py with methods: create_agent (creates DynamoDB entry with status="creating"), get_agent, list_user_agents, update_agent_status, update_agent_code_path, update_generated_prompt
+  - Create backend/services/s3_service.py with methods: upload_knowledge_base_files (uploads to s3://oratio-knowledge-bases/{userId}/{agentId}/ with tags), generate_folder_structure
+  - Implement proper error handling and logging in all services
+  - _Requirements: 2.1, 2.2, 8.1, 8.2_
+
+- [x] 3.5 Implement agent creation API endpoint
+  - Create POST /api/agents endpoint in backend/routers/agents.py
+  - Accept multipart/form-data with fields: agentName, agentType, sop, knowledgeBaseDescription, humanHandoffDescription, files (multiple), folderFileDescriptions (JSON string with nested structure)
+  - Extract userId from JWT token for tenant isolation
+  - Generate unique agentId and knowledgeBaseId (UUID)
+  - Parse folderFileDescriptions JSON into nested dict structure: {"folder1": {"file1.pdf": "desc"}, "file2.txt": "desc"}
+  - Upload files to S3 with proper tagging (userId, agentId, resourceType=knowledge-base)
+  - Create knowledge base entry in DynamoDB with status="notready" and nested folderFileDescriptions
+  - Create agent entry in DynamoDB with status="creating" and all provided fields
+  - Trigger Step Functions workflow with payload: {userId, agentId, knowledgeBaseId, sop, knowledgeBaseDescription, humanHandoffDescription}
+  - Return agent details with status="creating"
+  - _Requirements: 2.1, 2.2, 2.8, 11.1_
+
+- [x] 3.6 Implement agent listing and retrieval endpoints
+  - Create GET /api/agents endpoint to list all user's agents with filtering by status
+  - Create GET /api/agents/{agentId} endpoint to get single agent details
+  - Ensure tenant isolation by validating userId from JWT matches agent's userId
+  - Return 404 if agent not found or doesn't belong to user
+  - Include knowledge base details in agent response
+  - _Requirements: 2.1, 8.1, 12.6_
+
+- [x] 3.7 Implement KB Provisioner Lambda function
+  - Update lambdas/kb_provisioner/handler.py to create Bedrock Knowledge Base
+  - Retrieve knowledge base details from DynamoDB using knowledgeBaseId
+  - Create Bedrock Knowledge Base with OpenSearch Serverless backend and userId tag
+  - Create S3 data source pointing to s3://oratio-knowledge-bases/{userId}/{agentId}/
+  - Configure chunking strategy (FIXED_SIZE, 500 tokens, 20% overlap)
+  - Start ingestion job and wait for completion (with timeout and retry logic)
+  - Update knowledge base in DynamoDB with bedrockKnowledgeBaseId and status="ready" on success
+  - Update status="error" on failure with error details
+  - Return {knowledgeBaseId, bedrockKnowledgeBaseId, status} for next step
+  - _Requirements: 2.3, 10.1, 11.2_
+
+- [x] 3.8 Implement AgentCreator Invoker Lambda function
+  - Update lambdas/agentcreator_invoker/handler.py to invoke AgentCreator meta-agent
+  - Retrieve agent details from DynamoDB using agentId
+  - Retrieve knowledge base details including nested folderFileDescriptions structure
+  - Prepare payload for AgentCreator: {sop, knowledgeBaseId, bedrockKnowledgeBaseId, knowledgeBaseDescription, humanHandoffDescription, folderFileDescriptions}
+  - Invoke AgentCreator meta-agent via bedrock-agent-runtime with proper session management
+  - AgentCreator should output: agent_file.py (Strands agent code) and prompt.md (system prompt for Nova Sonic)
+  - Store agent_file.py to s3://oratio-generated-code/{userId}/{agentId}/agent_file.py with tags (userId, agentId, resourceType=generated-code)
+  - Store prompt.md to s3://oratio-generated-code/{userId}/{agentId}/prompt.md with same tags
+  - Update agent in DynamoDB with agentCodeS3Path and generatedPromptS3Path
+  - Return {agentId, codeS3Path, promptS3Path} for next step
+  - _Requirements: 2.4, 10.2, 10.3, 10.4, 10.5, 10.6, 11.3_
+
+- [x] 3.9 Implement Code Checker Lambda function
+  - Create lambdas/code_checker/handler.py to check if generated code exists in S3
+  - Accept action="check_code" in event payload
+  - Check if s3://oratio-generated-code/{userId}/{agentId}/agent_file.py exists
+  - Return {codeReady: true/false, agentId, codeS3Path} for Step Functions decision
+  - _Requirements: 11.4_
+
+- [x] 3.10 Implement AgentCore Deployer Lambda function
+  - Update lambdas/agentcore_deployer/handler.py to deploy agent to AgentCore
+  - Retrieve generated agent code from S3 using agentCodeS3Path
+  - Deploy agent to AWS AgentCore using bedrock-agent APIs with tags (userId, agentId)
+  - Create agent alias for production deployment
+  - Store agentcoreAgentId and agentcoreAgentArn in DynamoDB
+  - Generate websocketUrl and apiEndpoint based on agent type
+  - Update agent status to "active" in DynamoDB
+  - Send notification to user (future: via SNS/SES)
+  - Return {agentId, status: "active", agentcoreAgentId, websocketUrl, apiEndpoint}
+  - _Requirements: 2.5, 2.6, 11.5_
+
+- [x] 3.11 Create Step Functions workflow for agent creation
+  - Update infrastructure/cdk_constructs/stepfunctions.py (or create if not exists) with agent creation state machine
+  - Define workflow: Start → KB Provisioner → AgentCreator Invoker → Wait (30s) → Code Checker → Choice (codeReady?) → [Yes: AgentCore Deployer, No: Wait (max 20 min total)] → End
+  - Configure error handling with Catch blocks for each Lambda
+  - Set retry policies for transient failures (3 retries with exponential backoff)
+  - Set overall workflow timeout to 20 minutes
+  - On error, update agent status to "failed" in DynamoDB with error details
+  - On timeout, update agent status to "failed" with timeout error message
+  - Configure CloudWatch logging for workflow execution
+  - Deploy Step Functions state machine via CDK
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8_
 
-- [ ] 3.4 Create Bedrock Knowledge Base integration
-  - Implement Bedrock client for Knowledge Base operations
-  - Create knowledge base provisioning logic
-  - Set up document ingestion workflow
-  - _Requirements: 2.3, 10.1_
+- [x] 3.12 Update CDK infrastructure for Lambda functions
+  - Update infrastructure/stacks/lambda_stack.py (or create if not exists) to define all Lambda functions
+  - Configure KB Provisioner Lambda with environment variables: AGENTS_TABLE, KB_TABLE, KB_BUCKET
+  - Configure AgentCreator Invoker Lambda with environment variables: AGENTS_TABLE, CODE_BUCKET, AGENTCREATOR_AGENT_ID
+  - Configure Code Checker Lambda with environment variables: CODE_BUCKET
+  - Configure AgentCore Deployer Lambda with environment variables: AGENTS_TABLE, CODE_BUCKET
+  - Grant IAM permissions: DynamoDB read/write, S3 read/write, Bedrock KB creation, AgentCore deployment, Step Functions execution
+  - Set appropriate timeout (5 min for KB Provisioner, 15 min for AgentCreator Invoker, 10 min for Deployer)
+  - Deploy Lambda functions via CDK
+  - _Requirements: 11.2, 11.3, 11.5_
 
-- [ ] 3.5 Implement agent creation API endpoints
-  - Create POST /api/agents/create endpoint
-  - Create GET /api/agents endpoint for listing
-  - Create GET /api/agents/{agent_id} endpoint
-  - Create PATCH /api/agents/{agent_id} endpoint
-  - Create DELETE /api/agents/{agent_id} endpoint
-  - _Requirements: 2.1, 8.1, 8.2, 8.6_
-
-- [ ] 3.6 Build agent creation frontend wizard
-  - Create multi-step agent creation form with Oratio design system (rounded corners, flowing forms)
-  - Implement file upload component with drag-and-drop following design patterns
-  - Add real-time status updates during creation with animated progress indicators
-  - Create agent configuration interface with pill-shaped buttons and soft gradients
-  - Reference design inspiration from frontend/public/design/dashboard.html
-  - _Requirements: 2.1, 2.8, 8.1_
-
-- [ ]* 3.7 Write agent management unit tests
-  - Test agent creation workflow logic
-  - Test document upload and validation
-  - Test Step Functions integration
+- [ ]* 3.13 Write unit tests for agent service
+  - Test agent creation workflow logic in backend/tests/test_agent_service.py
+  - Test document upload and S3 tagging in backend/tests/test_s3_service.py
+  - Test knowledge base service operations in backend/tests/test_knowledge_base_service.py
+  - Mock AWS clients (S3, DynamoDB, Step Functions) for isolated testing
+  - Test error handling and validation
   - _Requirements: 2.1, 2.7, 11.7_
 
 - [ ] 4. Implement AgentCreator meta-agent pipeline with DSPy + LangGraph
