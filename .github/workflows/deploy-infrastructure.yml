@@ -292,6 +292,8 @@ jobs:
       - name: Create deployment tag
         if: success()
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "deploy-$(date +%Y%m%d-%H%M%S)" -m "Deployment to ${{ github.event.inputs.environment || 'staging' }}"
           git push origin --tags || true
       
