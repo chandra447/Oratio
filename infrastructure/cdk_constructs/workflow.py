@@ -3,7 +3,7 @@ from constructs import Construct
 
 
 class WorkflowConstruct(Construct):
-    """Step Functions state machine for agent creation workflow"""
+    """Simplified Step Functions workflow for agent creation"""
 
     def __init__(
         self,
@@ -11,7 +11,6 @@ class WorkflowConstruct(Construct):
         construct_id: str,
         kb_provisioner: lambda_.Function,
         agentcreator_invoker: lambda_.Function,
-        agentcore_deployer: lambda_.Function,
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -31,36 +30,8 @@ class WorkflowConstruct(Construct):
             output_path="$.Payload",
         )
 
-        wait_for_code = sfn.Wait(self, "WaitForCode", time=sfn.WaitTime.duration(Duration.seconds(30)))
-
-        check_code_task = tasks.LambdaInvoke(
-            self,
-            "CheckCodeTask",
-            lambda_function=agentcore_deployer,
-            payload=sfn.TaskInput.from_object(
-                {"action": "check_code", "agentId": sfn.JsonPath.string_at("$.agentId")}
-            ),
-            output_path="$.Payload",
-        )
-
-        deployer_task = tasks.LambdaInvoke(
-            self,
-            "DeployerTask",
-            lambda_function=agentcore_deployer,
-            output_path="$.Payload",
-        )
-
-        # Define workflow
-        definition = (
-            kb_provisioner_task.next(agentcreator_invoker_task)
-            .next(wait_for_code)
-            .next(check_code_task)
-            .next(
-                sfn.Choice(self, "CodeReady?")
-                .when(sfn.Condition.boolean_equals("$.codeReady", True), deployer_task)
-                .otherwise(wait_for_code)
-            )
-        )
+        # Simplified workflow: KB Provisioner → AgentCreator (which marks as active)
+        definition = kb_provisioner_task.next(agentcreator_invoker_task)
 
         # Create state machine
         self.state_machine = sfn.StateMachine(
