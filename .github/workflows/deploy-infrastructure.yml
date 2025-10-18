@@ -19,6 +19,11 @@ on:
         options:
           - staging
           - production
+      force_docker_build:
+        description: 'Force Docker image rebuild (ignore change detection)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   AWS_REGION: us-east-1
@@ -39,6 +44,23 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      # Detect which files changed to skip unnecessary Docker builds
+      - name: Detect changed files
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            agentcreator:
+              - 'agent-creator/**'
+            backend:
+              - 'backend/**'
+            chameleon:
+              - 'agent-creator/generic_loader.py'
+              - 'agent-creator/Dockerfile.chameleon'
+            infrastructure:
+              - 'infrastructure/**'
+              - 'lambdas/**'
       
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -91,6 +113,7 @@ jobs:
       
       # Step 4: Build and push AgentCreator Docker image (ARM64)
       - name: Build and push AgentCreator image
+        if: steps.changes.outputs.agentcreator == 'true' || inputs.force_docker_build
         uses: docker/build-push-action@v5
         with:
           context: ./agent-creator
@@ -105,11 +128,17 @@ jobs:
       
       - name: Set AgentCreator image URI
         run: |
-          echo "AGENTCREATOR_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_AGENTCREATOR_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
-          echo "✓ AgentCreator image pushed: ${{ github.sha }}"
+          if [ "${{ steps.changes.outputs.agentcreator }}" == "true" ] || [ "${{ inputs.force_docker_build }}" == "true" ]; then
+            echo "AGENTCREATOR_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_AGENTCREATOR_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
+            echo "✓ AgentCreator image pushed: ${{ github.sha }}"
+          else
+            echo "AGENTCREATOR_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_AGENTCREATOR_REPO }}:latest" >> $GITHUB_ENV
+            echo "⏭️  AgentCreator unchanged, using latest image"
+          fi
       
       # Step 5: Build and push Backend Docker image (ARM64)
       - name: Build and push Backend image
+        if: steps.changes.outputs.backend == 'true' || inputs.force_docker_build
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -124,11 +153,17 @@ jobs:
       
       - name: Set Backend image URI
         run: |
-          echo "BACKEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
-          echo "✓ Backend image pushed: ${{ github.sha }}"
+          if [ "${{ steps.changes.outputs.backend }}" == "true" ] || [ "${{ inputs.force_docker_build }}" == "true" ]; then
+            echo "BACKEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
+            echo "✓ Backend image pushed: ${{ github.sha }}"
+          else
+            echo "BACKEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPO }}:latest" >> $GITHUB_ENV
+            echo "⏭️  Backend unchanged, using latest image"
+          fi
       
       # Step 6: Build and push Chameleon Docker image (ARM64)
       - name: Build and push Chameleon image
+        if: steps.changes.outputs.chameleon == 'true' || inputs.force_docker_build
         uses: docker/build-push-action@v5
         with:
           context: ./agent-creator
@@ -143,8 +178,13 @@ jobs:
       
       - name: Set Chameleon image URI
         run: |
-          echo "CHAMELEON_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
-          echo "✓ Chameleon image pushed: ${{ github.sha }}"
+          if [ "${{ steps.changes.outputs.chameleon }}" == "true" ] || [ "${{ inputs.force_docker_build }}" == "true" ]; then
+            echo "CHAMELEON_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
+            echo "✓ Chameleon image pushed: ${{ github.sha }}"
+          else
+            echo "CHAMELEON_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:latest" >> $GITHUB_ENV
+            echo "⏭️  Chameleon unchanged, using latest image"
+          fi
       
       # Step 7: CDK Bootstrap (if needed)
       - name: CDK Bootstrap
@@ -187,11 +227,12 @@ jobs:
       
       # Step 9: Deploy AgentCreator to Bedrock AgentCore Runtime (AFTER CDK)
       - name: Deploy AgentCreator to AgentCore
+        if: steps.changes.outputs.agentcreator == 'true' || inputs.force_docker_build
         working-directory: infrastructure
         run: |
           OUTPUT=$(uv run python scripts/deploy_agentcore.py \
             --name oratio-agentcreator \
-            --image "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_AGENTCREATOR_REPO }}:${{ github.sha }}" \
+            --image "${{ env.AGENTCREATOR_IMAGE_URI }}" \
             --role-arn "${{ steps.export_roles.outputs.agentcreator_role_arn }}" \
             --description "Meta-agent that generates Strands agents from SOPs" \
             --region ${{ env.AWS_REGION }})
@@ -202,6 +243,7 @@ jobs:
       
       # Step 10: Store AgentCreator Runtime ARN in Parameter Store
       - name: Store AgentCreator Runtime ARN in Parameter Store
+        if: steps.changes.outputs.agentcreator == 'true' || inputs.force_docker_build
         run: |
           aws ssm put-parameter \
             --name "/oratio/agentcreator/runtime-arn" \
@@ -213,6 +255,7 @@ jobs:
       
       # Step 11: Deploy Chameleon to Bedrock AgentCore Runtime
       - name: Deploy Chameleon to AgentCore
+        if: steps.changes.outputs.chameleon == 'true' || inputs.force_docker_build
         working-directory: infrastructure
         env:
           CODE_BUCKET: ${{ secrets.CODE_BUCKET_NAME || 'oratio-generated-code' }}
@@ -220,7 +263,7 @@ jobs:
         run: |
           OUTPUT=$(uv run python scripts/deploy_agentcore.py \
             --name oratio-chameleon \
-            --image "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:${{ github.sha }}" \
+            --image "${{ env.CHAMELEON_IMAGE_URI }}" \
             --role-arn "${{ steps.export_roles.outputs.chameleon_role_arn }}" \
             --description "Generic loader that dynamically loads agent code from S3" \
             --env "CODE_BUCKET=${CODE_BUCKET}" \
@@ -234,6 +277,7 @@ jobs:
       
       # Step 12: Store Chameleon Runtime ARN in Parameter Store
       - name: Store Chameleon Runtime ARN in Parameter Store
+        if: steps.changes.outputs.chameleon == 'true' || inputs.force_docker_build
         run: |
           aws ssm put-parameter \
             --name "/oratio/chameleon/runtime-arn" \
