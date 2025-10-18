@@ -20,9 +20,12 @@ def wait_for_runtime(client, runtime_arn: str, max_wait: int = 300) -> bool:
     logger.info(f"Waiting for runtime to be active (max {max_wait}s)...")
     start_time = time.time()
     
+    # Extract runtime ID from ARN
+    runtime_id = runtime_arn.split('/')[-1]
+    
     while time.time() - start_time < max_wait:
         try:
-            response = client.get_agent_runtime(agentRuntimeArn=runtime_arn)
+            response = client.get_agent_runtime(agentRuntimeId=runtime_id)
             status = response.get('agentRuntime', {}).get('status')
             
             if status == 'AVAILABLE':
@@ -49,15 +52,22 @@ def sanitize_runtime_name(name: str) -> str:
     - Can only contain letters, numbers, and underscores
     - Pattern: [a-zA-Z][a-zA-Z0-9_]{0,47}
     """
+    if not name:
+        raise ValueError("Runtime name cannot be empty")
+    
     # Replace hyphens with underscores
     sanitized = name.replace('-', '_')
     
     # Ensure it starts with a letter
-    if not sanitized[0].isalpha():
+    if not sanitized or not sanitized[0].isalpha():
         sanitized = 'agent_' + sanitized
     
     # Remove any invalid characters
     sanitized = ''.join(c for c in sanitized if c.isalnum() or c == '_')
+    
+    # Ensure we still have a valid name after sanitization
+    if not sanitized:
+        raise ValueError(f"Cannot sanitize runtime name: '{name}' results in empty string")
     
     # Truncate to 48 characters max
     sanitized = sanitized[:48]
