@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import time
+import uuid
 
 import boto3
 
@@ -12,13 +13,42 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 dynamodb = boto3.resource("dynamodb")
 s3_client = boto3.client("s3")
-bedrock_agent_runtime = boto3.client("bedrock-agent-runtime")
+bedrock_agentcore_client = boto3.client("bedrock-agentcore")
+ssm_client = boto3.client("ssm")
+
+# Import MemoryClient for creating agent-specific memory
+try:
+    from bedrock_agentcore.memory import MemoryClient
+    memory_client = MemoryClient()
+    MEMORY_ENABLED = True
+except ImportError:
+    logger.warning("bedrock_agentcore.memory not available - memory features disabled")
+    memory_client = None
+    MEMORY_ENABLED = False
 
 # Environment variables
 AGENTS_TABLE = os.environ.get("AGENTS_TABLE", "oratio-agents")
 CODE_BUCKET = os.environ.get("CODE_BUCKET", "oratio-generated-code")
-AGENTCREATOR_AGENT_ID = os.environ.get("AGENTCREATOR_AGENT_ID")
-AGENTCREATOR_AGENT_ALIAS_ID = os.environ.get("AGENTCREATOR_AGENT_ALIAS_ID", "TSTALIASID")
+SHARED_AGENTCORE_RUNTIME_ARN = os.environ.get("SHARED_AGENTCORE_RUNTIME_ARN")
+
+
+def get_agentcreator_runtime_arn():
+    """Fetch AgentCreator Runtime ARN from Parameter Store (CDK-friendly, no stack drift)"""
+    try:
+        response = ssm_client.get_parameter(
+            Name='/oratio/agentcreator/runtime-arn',
+            WithDecryption=False
+        )
+        arn = response['Parameter']['Value']
+        logger.info(f"Retrieved AgentCreator Runtime ARN from Parameter Store: {arn}")
+        return arn
+    except Exception as e:
+        logger.error(f"Failed to get Runtime ARN from Parameter Store: {e}")
+        # Fallback to environment variable (for backward compatibility during migration)
+        fallback_arn = os.environ.get("AGENTCREATOR_RUNTIME_ARN", "")
+        if fallback_arn:
+            logger.warning(f"Using fallback ARN from environment variable: {fallback_arn}")
+        return fallback_arn
 
 
 def lambda_handler(event, context):
@@ -41,8 +71,10 @@ def lambda_handler(event, context):
         if not all([user_id, agent_id, kb_id, sop]):
             raise ValueError("Missing required parameters: userId, agentId, knowledgeBaseId, sop")
 
-        if not AGENTCREATOR_AGENT_ID:
-            raise ValueError("AGENTCREATOR_AGENT_ID environment variable not configured")
+        # Get AgentCreator Runtime ARN from Parameter Store (CDK-friendly)
+        agentcreator_runtime_arn = get_agentcreator_runtime_arn()
+        if not agentcreator_runtime_arn:
+            raise ValueError("AgentCreator Runtime ARN not found in Parameter Store or environment variable")
 
         logger.info(f"Invoking AgentCreator meta-agent for agent {agent_id}")
 
@@ -64,40 +96,65 @@ def lambda_handler(event, context):
             "voice_personality": voice_personality,
         }
 
-        input_text = json.dumps(agent_creator_input)
-        session_id = f"agent-creation-{agent_id}-{int(time.time())}"
+        # Create session ID (must be 33+ characters for AgentCore)
+        session_id = f"agent-creation-{agent_id}-{uuid.uuid4().hex}"
+        
+        # Prepare payload for AgentCore Runtime
+        payload = json.dumps({"input": agent_creator_input})
 
-        logger.info(f"Invoking AgentCreator: {AGENTCREATOR_AGENT_ID}")
+        logger.info(f"Invoking AgentCreator Runtime: {agentcreator_runtime_arn}")
+        logger.info(f"Session ID: {session_id} (length: {len(session_id)})")
 
-        # Invoke the AgentCreator meta-agent via Bedrock Agent Runtime
-        response = bedrock_agent_runtime.invoke_agent(
-            agentId=AGENTCREATOR_AGENT_ID,
-            agentAliasId=AGENTCREATOR_AGENT_ALIAS_ID,
-            sessionId=session_id,
-            inputText=input_text,
+        # --------------------------------Invoke the AgentCreator meta-agent via Bedrock AgentCore Runtime--------------------------------
+        response = bedrock_agentcore_client.invoke_agent_runtime(
+            agentRuntimeArn=agentcreator_runtime_arn,
+            runtimeSessionId=session_id,
+            payload=payload,
+            qualifier="DEFAULT"
         )
 
-        # Process streaming response
-        agent_response_text = ""
-        logger.info("Processing AgentCreator response stream")
+        # Process response from AgentCore
+        logger.info("Processing AgentCreator response")
+        
+        # Read the streaming response body
+        response_body = response['response'].read()
+        response_data = json.loads(response_body)
+        
+        logger.info(f"Received response from AgentCreator: {len(response_body)} bytes")
 
-        for event_chunk in response.get("completion", []):
-            chunk = event_chunk.get("chunk")
-            if chunk:
-                chunk_bytes = chunk.get("bytes")
-                if chunk_bytes:
-                    chunk_text = chunk_bytes.decode("utf-8")
-                    agent_response_text += chunk_text
+        # Extract outputs from AgentCore response
+        output = response_data.get("output", {})
+        
+        # Check for errors in response
+        if output.get("error"):
+            error_msg = f"AgentCreator returned error: {output.get('error')} (type: {output.get('error_type')})"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        agent_code = output.get("agent_code")
+        generated_prompt = output.get("generated_prompt")
+        
+        # Extract voice_prompt if present (for Nova Sonic voice interface)
+        voice_prompt = None
+        if isinstance(generated_prompt, dict):
+            voice_prompt = generated_prompt.get("voice_prompt")
+            # Use full_prompt for the agent code system prompt
+            generated_prompt_text = generated_prompt.get("full_prompt", str(generated_prompt))
+        else:
+            generated_prompt_text = str(generated_prompt) if generated_prompt else ""
 
-        logger.info(f"Received response from AgentCreator ({len(agent_response_text)} bytes)")
-
-        # Parse the response (AgentCreator returns JSON with agent_code and generated_prompt)
-        result = json.loads(agent_response_text)
-        agent_code = result.get("agent_code")
-        generated_prompt = result.get("generated_prompt")
-
-        if not agent_code or not generated_prompt:
+        if not agent_code or not generated_prompt_text:
             raise ValueError("AgentCreator did not return valid agent_code or generated_prompt")
+
+        # Decode escaped newlines if present (e.g., "import os\nimport logging" -> actual newlines)
+        # This handles cases where the LLM returns escaped strings
+        if isinstance(agent_code, str) and "\\n" in agent_code:
+            try:
+                # Use encode/decode to properly handle escape sequences
+                agent_code = agent_code.encode('utf-8').decode('unicode_escape')
+                logger.info("Converted escaped newlines to actual newlines in agent code")
+            except Exception as e:
+                logger.warning(f"Failed to decode escape sequences: {e}, using code as-is")
 
         logger.info("AgentCreator invocation completed successfully")
 
@@ -116,18 +173,61 @@ def lambda_handler(event, context):
         code_s3_path = f"s3://{CODE_BUCKET}/{s3_key}"
         logger.info(f"Uploaded code to {code_s3_path}")
 
-        # Update agent in DynamoDB with code path and generated prompt
+        # Create or get dedicated memory resource for this agent
+        memory_id = None
+        if MEMORY_ENABLED and memory_client:
+            try:
+                logger.info(f"Creating/getting memory resource for agent {agent_id}")
+                memory = memory_client.create_or_get_memory(
+                    name=f"oratio-agent-{agent_id}",
+                    strategies=[],  # No strategies = short-term memory only (raw events)
+                    description=f"Conversation memory for agent {agent_id} (user: {user_id})",
+                    event_expiry_days=30,  # Keep conversations for 30 days
+                )
+                memory_id = memory['id']
+                logger.info(f"✅ Memory resource ready: {memory_id}")
+            except Exception as memory_error:
+                # Log error but don't fail the entire deployment
+                # Agent can still work without memory (no conversation history)
+                logger.error(f"Failed to create/get memory resource: {memory_error}", exc_info=True)
+                logger.warning("Agent will be deployed WITHOUT memory (no conversation continuity)")
+        else:
+            logger.info("Memory creation skipped (not enabled or client not available)")
+
+        # Validate Chameleon runtime ARN is configured
+        if not SHARED_AGENTCORE_RUNTIME_ARN:
+            raise ValueError("SHARED_AGENTCORE_RUNTIME_ARN not configured")
+        
+        # Update agent in DynamoDB with code path, prompts, memory ID, and mark as active
+        # Note: URLs (websocket/API endpoints) are constructed on-the-fly in FastAPI
+        update_expression = "SET agentCodeS3Path = :path, generatedPrompt = :prompt, agentcoreRuntimeArn = :arn, #status = :status, updatedAt = :updated"
+        expression_values = {
+            ":path": code_s3_path,
+            ":prompt": generated_prompt_text,  # Agent system prompt (full_prompt)
+            ":arn": SHARED_AGENTCORE_RUNTIME_ARN,
+            ":status": "active",
+            ":updated": int(time.time()),
+        }
+        
+        # Add voice_prompt if generated (for Nova Sonic)
+        if voice_prompt:
+            update_expression += ", voicePrompt = :voice_prompt"
+            expression_values[":voice_prompt"] = voice_prompt
+            logger.info(f"Voice prompt generated: {voice_prompt[:100]}...")
+        
+        # Add memory_id if created successfully
+        if memory_id:
+            update_expression += ", memoryId = :memory_id"
+            expression_values[":memory_id"] = memory_id
+        
         agents_table.update_item(
             Key={"userId": user_id, "agentId": agent_id},
-            UpdateExpression="SET agentCodeS3Path = :path, generatedPrompt = :prompt, updatedAt = :updated",
-            ExpressionAttributeValues={
-                ":path": code_s3_path,
-                ":prompt": generated_prompt,
-                ":updated": int(time.time()),
-            },
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues=expression_values,
         )
 
-        logger.info(f"Updated agent {agent_id} with code path and prompt")
+        logger.info(f"Agent {agent_id} marked as active with Chameleon runtime" + (f" and memory {memory_id}" if memory_id else " (no memory)"))
 
         # Return success with code details
         return {
@@ -137,6 +237,7 @@ def lambda_handler(event, context):
             "bedrockKnowledgeBaseId": bedrock_kb_id,
             "codeS3Path": code_s3_path,
             "generatedPrompt": generated_prompt,
+            "memoryId": memory_id,
             "sop": sop,
             "knowledgeBaseDescription": kb_description,
             "humanHandoffDescription": handoff_description,
