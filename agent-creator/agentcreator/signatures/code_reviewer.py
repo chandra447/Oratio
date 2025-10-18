@@ -1,187 +1,136 @@
-"""CodeReviewer Signature - Reviews generated agent code for quality"""
-
 import dspy
-
-
+from .types import Requirements,CodeReview, AgentPlan
 class CodeReviewerSignature(dspy.Signature):
-    """Review generated Strands agent code for correctness and production-readiness.
-    
-    IMPORTANT: When calling tools, use plain tool names without markdown formatting (no backticks).
-    Example: search_docs NOT `search_docs`
-    
-    GOAL: Verify that the generated code:
-    - Uses only valid imports from Strands and AgentCore documentation
-    - Follows the correct AgentCore deployment pattern
-    - Implements all requirements from the plan
-    - Has no syntax errors or hallucinated APIs
-    - Includes proper error handling and logging
-    
-    VALIDATION APPROACH:
-    - Verify each import against Strands or AgentCore documentation
-    - Check that BedrockAgentCoreApp pattern is correctly implemented
-    - Validate memory hooks follow HookProvider pattern (if used)
-    - Ensure Knowledge Base retrieval uses boto3 correctly
-    - Check for common hallucination patterns
-    
-    DOCUMENTATION SOURCES AVAILABLE:
-    Use fetch_doc(url) to verify patterns against these URLs:
-    
-    1. Agent Loop (explains why NO manual tool selection):
-       URL: https://strandsagents.com/latest/documentation/docs/user-guide/concepts/agents/agent-loop/
-       Verify: Agent automatically handles tool selection via event loop
-    
-    2. AgentCore Deployment:
-       URL: https://strandsagents.com/latest/documentation/docs/user-guide/deploy/deploy_to_bedrock_agentcore/#option-a-sdk-integration
-       Verify: Correct @app.entrypoint pattern and invoke() signature
-    
-    3. Community Tools:
-       URL: https://strandsagents.com/latest/documentation/docs/user-guide/concepts/tools/community-tools-package/
-       Verify: Using strands_agents_tools imports, not manual implementations
-    
-    4. Multi-Agent Pattern:
-       URL: https://strandsagents.com/latest/documentation/docs/user-guide/concepts/multi-agent/agents-as-tools/
-       Verify: If multiple responsibilities, check if @tool pattern should be used
-    
-    Also available:
-    - search_docs(query): Search all Strands documentation
-    - search_agentcore_docs(query): Search AgentCore documentation
-    
-    CRITICAL CHECKS:
-    1. Import Validation:
-       - ❌ from strands.bedrock import BedrockAgentCoreApp (doesn't exist)
-       - ✅ from bedrock_agentcore.runtime import BedrockAgentCoreApp
-       - ❌ from strands.agents import StrandsAgent (doesn't exist)
-       - ✅ from strands import Agent
-       - ❌ from strands.tools import memory, retrieve (doesn't exist)
-       - ✅ from strands_agents_tools import retrieve, calculator, etc.
-    
-    2. AgentCore Pattern:
-       - Must have: app = BedrockAgentCoreApp()
-       - Must have: @app.entrypoint decorator on MODULE-LEVEL function
-       - Must have: def invoke(payload, context): signature (NOT def invoke(self, event))
-       - Must have: app.run() in if __name__ == "__main__"
-    
-    3. Agent Configuration (CRITICAL):
-       - Must have: system_prompt parameter in Agent() constructor
-       - Must NOT have: Manual keyword checking (if "product" in message.lower())
-       - Must NOT have: Manual tool selection logic (if condition: use_tool_a())
-       - The Agent's event loop handles tool selection automatically!
-    
-    4. Memory Hooks (if enabled):
-       - Must use: HookProvider, HookRegistry, MessageAddedEvent, AgentInitializedEvent
-       - Must NOT use: ShortTermMemoryHookProvider (doesn't exist)
-    
-    5. Multi-Agent Pattern (if SOP has multiple distinct responsibilities):
-       - Consider: Using @tool decorator to wrap specialized agents
-       - Consider: Orchestrator agent that coordinates specialized agents
-    
-    CORRECT CODE PATTERN EXAMPLE:
-    ```python
-    from bedrock_agentcore.runtime import BedrockAgentCoreApp
-    from strands import Agent
-    from strands_agents_tools import retrieve, handoff_to_user
-    
-    app = BedrockAgentCoreApp()
-    
-    # Agent with system_prompt - tools are passed as list
-    agent = Agent(
-        model="amazon.nova-pro-v1:0",
-        system_prompt="You are a customer service agent. Use retrieve tool for product/order questions. Use handoff_to_user for complaints or refunds over $100.",
-        tools=[
-            retrieve(knowledge_base_id="kb-test-123"),
-            handoff_to_user()
-        ]
-    )
-    
-    @app.entrypoint
-    def invoke(payload, context):
-        user_message = payload.get("prompt", "Hello")
-        response = agent(user_message)  # Agent automatically selects tools!
-        return response.message['content'][0]['text']
-    
-    if __name__ == "__main__":
-        app.run()
-    ```
-    
-    WRONG PATTERNS TO FLAG:
-    - agent = retrieve(...) then agent.configure(...) - retrieve() returns a tool, not an agent!
-    - if "complaints" in error_message: handoff_to_user() - manual checking in error handler
-    - from strands.bedrock import BedrockAgentCoreApp - wrong import (should be bedrock_agentcore.runtime)
-    - from strands_agents_tools import memory - CRITICAL: memory tool doesn't exist!
-    - agent.configure(...) - Agent doesn't have a configure() method
-    
-    MEMORY CLARIFICATION (CRITICAL):
-    - ✅ bedrock_agentcore.memory.MemoryClient - For creating/managing memory resources
-    - ✅ bedrock_agentcore.memory.integrations.strands.session_manager.AgentCoreMemorySessionManager - For Strands integration
-    - ✅ bedrock_agentcore.memory.integrations.strands.config.AgentCoreMemoryConfig - Configuration
-    - ❌ strands_agents_tools.memory - Does NOT exist! This is a hallucination!
-    - ❌ Memory hooks with HookProvider - WRONG approach!
-    
-    CORRECT MEMORY PATTERN:
-    Memory is handled via session_manager parameter in Agent(), NOT as a tool or hook!
-    
-    ```python
-    from bedrock_agentcore.memory.integrations.strands.config import AgentCoreMemoryConfig
-    from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager
-    
-    # Get from payload/context
-    memory_id = context.get("memory_id") or os.getenv("MEMORY_ID")
-    actor_id = context.get("actor_id", "default-actor")
-    session_id = context.session_id if hasattr(context, 'session_id') else "default-session"
-    
-    # Configure memory
-    memory_config = AgentCoreMemoryConfig(
-        memory_id=memory_id,
-        session_id=session_id,
-        actor_id=actor_id
-    )
-    
-    # Create session manager
-    session_manager = AgentCoreMemorySessionManager(
-        agentcore_memory_config=memory_config,
-        region_name="us-east-1"
-    )
-    
-    # Agent with session_manager (NOT hooks!)
-    agent = Agent(
-        model="amazon.nova-pro-v1:0",
-        system_prompt="...",
-        tools=[retrieve(...), handoff_to_user()],
-        session_manager=session_manager  # Memory via session_manager!
-    )
-    ```
-    
-    APPROVAL CRITERIA:
-    - approved: true if no critical issues (hallucinated imports, wrong patterns)
-    - approved: false if any critical issues found
-    - code_quality_score: 1-10 (10 = perfect, production-ready)
-    
-    PROVIDE SPECIFIC, ACTIONABLE FIXES:
-    Instead of: "Remove manual keyword checking"
-    Say: "Replace lines 45-50 with: agent = Agent(model='...', system_prompt='...', tools=[retrieve(...), handoff_to_user()])"
-    
-    Instead of: "Use system_prompt"
-    Say: "Add system_prompt parameter to Agent() constructor on line 30. The system prompt should describe when to use each tool."
-    
-    OUTPUT FORMAT:
-    JSON object with:
-    - approved: boolean
-    - code_quality_score: number (1-10)
-    - critical_issues: list of strings with SPECIFIC line numbers and exact fixes
-    - correct_code_example: string showing the correct pattern for the main issue
-    - import_validation: string (summary of import checks)
     """
+    Rigorous review of generated Strands agent code for:
+    - canonical import/usage,
+    - deployment and entrypoint correctness,
+    - hooks and state injection pattern (Chameleon architecture),
+    - tool orchestration
+    - and full compliance with both the Strands SDK (agents-as-tools pattern) and the Chameleon generic loader architecture.
 
+⚠️ CRITICAL: MEMORY IS HANDLED BY CHAMELEON (NOT BY GENERATED CODE) ⚠️
+
+MEMORY ARCHITECTURE TO VALIDATE:
+- Generated code should NEVER import bedrock_agentcore.memory modules
+- Generated code should NEVER create AgentCoreMemorySessionManager or MemoryClient
+- Generated code MUST accept hooks and state parameters in:
+  * create_agent() or create_orchestrator() function
+  * invoke() function
+- Generated code MUST pass hooks and state to Agent constructor: Agent(..., hooks=hooks or [], state=state or {})
+- Memory is injected by Chameleon at runtime via HookProvider
+
+⚠️ CRITICAL: USE MCP DOCUMENTATION TOOLS TO VERIFY IMPORTS AND PATTERNS ⚠️
+
+Before reviewing, you SHOULD use MCP tools to verify patterns:
+- Use 'search_docs' and 'fetch_doc' to verify Strands patterns
+- Use 'search_agentcore_docs' and 'fetch_agentcore_doc' to verify AgentCore imports
+
+**MANDATORY VALIDATION CRITERIA (Actionable Review):**
+
+1. **Import Validation (CRITICAL - MOST COMMON ERRORS):**
+   ❌ WRONG: ANY imports from bedrock_agentcore (memory is handled by Chameleon)
+   ✅ CORRECT:
+   ```python
+   import os
+   import logging
+   from strands import Agent, tool
+   from strands_tools import retrieve, handoff_to_user
+   ```
+   
+   ❌ WRONG: `from strands.tools import tool` or `from strands_agents import Agent`
+   ✅ CORRECT: `from strands import Agent, tool` and `from strands_tools import retrieve, handoff_to_user`
+   
+   ❌ WRONG: `from bedrock_agentcore.runtime import BedrockAgentCoreApp` (Chameleon handles this)
+   ❌ WRONG: `from bedrock_agentcore.memory.integrations.strands.session_manager import AgentCoreMemorySessionManager`
+   
+   - Flag ANY bedrock_agentcore import - generated code should be pure Strands
+   - Use documentation tools to verify if unsure
+
+2. **Entrypoint Pattern (CRITICAL):**
+   ✅ CORRECT: Module-level `def invoke(payload, context, hooks=None, state=None)` function
+   ❌ WRONG: ANY BedrockAgentCoreApp usage (Chameleon handles the app runtime)
+   ❌ WRONG: `if __name__ == "__main__": app.run()` at end
+   ✅ CORRECT: Generated code should be a pure Python module that Chameleon can import
+
+3. **Hooks and State Injection Pattern (CRITICAL):**
+   ✅ CORRECT: create_agent() or create_orchestrator() accepts hooks and state:
+   ```python
+   def create_orchestrator(hooks=None, state=None):
+       return Agent(
+           system_prompt="...",
+           tools=[...],
+           hooks=hooks or [],
+           state=state or {}
+       )
+   ```
+   
+   ✅ CORRECT: invoke() function accepts hooks and state and passes them through:
+   ```python
+   def invoke(payload, context, hooks=None, state=None):
+       agent = create_orchestrator(hooks=hooks, state=state)
+       ...
+   ```
+   
+   ❌ WRONG: Creating ANY memory-related objects (AgentCoreMemorySessionManager, MemoryClient, etc.)
+   ❌ WRONG: get_session_manager() function
+   ❌ WRONG: Passing session_manager to Agent (use hooks instead)
+
+4. **Agent Invocation (CRITICAL):**
+   ❌ WRONG: `agent.invoke(query)` or `agent.handle(query)` - these methods don't exist
+   ✅ CORRECT: `agent(query)` or `agent({'message': query})` - Agent is callable
+
+5. **Tool Usage (Per Plan):**
+   - Only use documented community tools (`retrieve`, `handoff_to_user`, etc.)
+   - If `retrieve`: ensure `os.environ["KNOWLEDGE_BASE_ID"]` is set
+   - No manual tool selection (`if/else` in invoke() for routing)
+
+6. **Multi-Agent Orchestration (If Multi-Agent):**
+   ✅ CORRECT: Each specialist as @tool decorated function
+   ✅ CORRECT: Orchestrator has specialist tools in its tools list
+   ❌ WRONG: Manual routing with if/else in invoke()
+
+7. **Error Handling:**
+   ✅ CORRECT: Try/except in invoke(), logging, return serializable dict
+   ✅ CORRECT: Handle both 'prompt' and 'input' keys in payload
+
+**MOST CRITICAL ERRORS TO CATCH:**
+1. ANY bedrock_agentcore imports (memory is handled by Chameleon, not generated code)
+2. AgentCoreMemorySessionManager or MemoryClient usage
+3. BedrockAgentCoreApp usage (Chameleon is the runtime)
+4. Missing hooks/state parameters in create_agent/create_orchestrator
+5. Missing hooks/state parameters in invoke()
+6. Not passing hooks/state to Agent constructor
+7. Using agent.invoke() or agent.handle() (should be agent())
+8. Manual routing in invoke() function
+
+**VALIDATION OUTPUT:**
+- approved: bool (True ONLY if ALL critical import/pattern checks pass)
+- code_quality_score: 1-10 (Must be <5 if ANY critical import error; <8 if other blocking issues)
+- critical_issues: Line-numbered list with exact fix code
+- suggestions: Non-blocking improvements
+- import_validation: Exact verification of every import line
+- multi_agent_compliance: Verify @tool usage and no manual routing
+- hooks_state_compliance: Verify hooks/state pattern throughout
+- correct_code_example: Complete corrected code for biggest issue
+
+**REVIEW STRUCTURE:**
+- Each issue and suggestion must be paired with the corrected code fragment and a one-sentence rationale.
+
+**ALWAYS ENSURE ALL POINTS IN THIS CHECKLIST ARE ENFORCED ON EVERY REVIEW.**
+
+Example Critical Issues:
+- "Line 5: REMOVE `from bedrock_agentcore.runtime import BedrockAgentCoreApp` - Chameleon handles runtime, generated code should be pure Strands"
+- "Line 10: REMOVE `from bedrock_agentcore.memory...` imports - Memory is injected by Chameleon via hooks"
+- "Line 25: ADD hooks and state parameters to create_orchestrator(hooks=None, state=None)"
+- "Line 45: REMOVE get_session_manager() function - Chameleon injects memory via hooks"
+- "Line 60: Pass hooks and state to Agent: Agent(..., hooks=hooks or [], state=state or {})"
+"""
     agent_code: str = dspy.InputField(desc="Generated Python code to review")
-    plan: str = dspy.InputField(desc="Original architecture plan")
-    requirements: str = dspy.InputField(desc="Original requirements from SOP")
+    plan: AgentPlan = dspy.InputField(desc="Architecture plan (from PlanDrafter)")
+    requirements: Requirements = dspy.InputField(desc="Requirements from SOP/voice instructions")
 
-
-    # Output fields
-    approved: bool = dspy.OutputField(
-        desc="Boolean indicating if code is approved (true) or needs revision (false). True if no critical issues found."
-    )
-    
-    review: str = dspy.OutputField(
-        desc="JSON review with code_quality_score (1-10), critical_issues (list), suggestions (list), import_validation (string). Do NOT include 'approved' in this JSON - it's a separate field."
+    approved: bool = dspy.OutputField(desc="True if code passes all blocking criteria; False if any critical issue found.")
+    review: CodeReview = dspy.OutputField(
+        desc="Structured review—code_quality_score (1-10); critical_issues (line numbers + fixes + rationale); suggestions; import_validation; documentation_verification; multi_agent_compliance; hooks_state_compliance; correct_code_example."
     )

@@ -21,6 +21,10 @@ from typing import Any, Dict, List, Optional, TypedDict
 import dspy
 from langgraph.graph import END, StateGraph
 
+from openinference.instrumentation.dspy import DSPyInstrumentor
+
+DSPyInstrumentor().instrument()
+
 from .modules import (
     CodeGenerator,
     CodeReviewer,
@@ -28,6 +32,14 @@ from .modules import (
     PlanReviewer,
     PromptGenerator,
     SOPParser,
+)
+from .signatures.types import (
+    PlanReview,
+    CodeReview,
+    Requirements,
+    AgentPlan,
+    SystemPrompt,
+    CodeGenerationOutput,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,23 +60,24 @@ class AgentCreatorState(TypedDict, total=False):
     voice_personality: Optional[Dict[str, Any]]
 
     # Intermediate fields (populated during pipeline execution)
-    requirements: str
-    plan: str
+    requirements: Requirements
+    plan: AgentPlan
     review_iteration: int
-    plan_approved: bool
+    plan_approved: bool 
+    plan_review: PlanReview
     agent_code: str
     code_validation_status: str
     documentation_references: List[str]
     implementation_notes: str
     model_id: str
     enable_memory_hooks: bool
-    code_review: str
+    code_review: CodeReview
     code_approved: bool
     code_review_feedback: str
     code_iteration: int
 
     # Output fields (final results)
-    generated_prompt: str
+    generated_prompt: SystemPrompt
     final_agent_code: str
 
 
@@ -101,11 +114,18 @@ async def parse_sop_node(state: AgentCreatorState) -> AgentCreatorState:
 async def draft_plan_node(state: AgentCreatorState) -> AgentCreatorState:
     """Draft agent architecture plan"""
     logger.info(f"Drafting plan (iteration {state['review_iteration']})...")
+    #if iteration<3 then add the plan_review
+    plan_review = None
+    if state.get('plan_review'):
+        plan_review = state['plan_review']
 
-    plan = await plan_drafter.acall(
+    result  = await plan_drafter.acall(
         requirements=state["requirements"],
         bedrock_knowledge_base_id=state["bedrock_knowledge_base_id"],
+        plan_review = plan_review
     )
+
+    plan = getattr(result, "plan", None)
 
     logger.info("Plan drafted")
     return {**state, "plan": plan}
@@ -123,21 +143,22 @@ async def review_plan_node(state: AgentCreatorState) -> AgentCreatorState:
 
     # Extract approved field directly (it's now a separate field, not in JSON)
     approved = getattr(result, "approved", False)  # Default to False for safety
-    review_text = getattr(result, "review", "")
+    review_obj: PlanReview = getattr(result, "review", None)
     
     logger.info(f"Plan review complete: approved={approved}")
 
     return {
         **state,
         "plan_approved": approved,
+        "plan_review": review_obj,
         "review_iteration": state["review_iteration"] + 1,
     }
 
 
 def should_continue_review(state: AgentCreatorState) -> str:
     """Decide whether to continue reviewing or proceed to code generation"""
-    # Continue reviewing if not approved and less than 3 iterations
-    if not state["plan_approved"] and state["review_iteration"] < 3:
+    # Continue reviewing if not approved and less than 4 iterations
+    if not state["plan_approved"] and state["review_iteration"] < 4:
         logger.info("Plan not approved, continuing review cycle")
         return "draft_plan"
     else:
@@ -181,13 +202,21 @@ async def generate_code_node(state: AgentCreatorState) -> AgentCreatorState:
         code_review_feedback=code_review_feedback,
     )
 
+    # Extract from CodeGenerationOutput object
+    output_obj: CodeGenerationOutput = getattr(generation_result, "output", None)
+
+    agent_code = output_obj.agent_code
+    validation_status = output_obj.validation_status
+    documentation_references = output_obj.documentation_references
+    implementation_notes = output_obj.implementation_notes
+
     logger.info("Agent code generated")
     return {
         **state,
-        "agent_code": generation_result.agent_code,
-        "code_validation_status": getattr(generation_result, "validation_status", "unknown"),
-        "documentation_references": getattr(generation_result, "documentation_references", []),
-        "implementation_notes": getattr(generation_result, "implementation_notes", ""),
+        "agent_code": agent_code,
+        "code_validation_status": validation_status,
+        "documentation_references": documentation_references,
+        "implementation_notes": implementation_notes,
         "model_id": model_id,
         "enable_memory_hooks": enable_memory_hooks,
         "code_iteration": code_iteration,
@@ -207,18 +236,14 @@ async def review_code_node(state: AgentCreatorState) -> AgentCreatorState:
 
     # Extract approved field directly (it's now a separate field, not in JSON)
     approved = getattr(result, "approved", True)  # Default to True if not found
-    review_text = getattr(result, "review", "")
+    review_obj = getattr(result, "review", None)
     
-    # Try to parse review JSON for additional details
+    # Extract details from CodeReview object
     critical_issues = []
     suggestions = []
-    try:
-        if review_text:
-            review_data = json.loads(review_text)
-            critical_issues = review_data.get("critical_issues", [])
-            suggestions = review_data.get("suggestions", [])
-    except json.JSONDecodeError:
-        logger.debug("Could not parse review JSON, using approved field only")
+    if review_obj:
+        critical_issues = review_obj.critical_issues
+        suggestions = review_obj.suggestions
     
     # Create feedback for next iteration
     feedback = ""
@@ -227,15 +252,15 @@ async def review_code_node(state: AgentCreatorState) -> AgentCreatorState:
             feedback = "Critical issues found:\n" + "\n".join(f"- {issue}" for issue in critical_issues)
         if suggestions:
             feedback += f"\n\nSuggestions:\n" + "\n".join(f"- {sug}" for sug in suggestions)
-        if not feedback:
-            # If no specific issues but not approved, use the review text
-            feedback = f"Code review feedback:\n{review_text[:500]}"  # First 500 chars
+        if not feedback and review_obj:
+            # If no specific issues but not approved, use the import_validation
+            feedback = f"Code review feedback:\n{review_obj.import_validation[:500]}"  # First 500 chars
 
     logger.info(f"Code review complete: approved={approved}, iteration={code_iteration}")
 
     return {
         **state,
-        "code_review": review_text,
+        "code_review": review_obj,
         "code_approved": approved,
         "code_review_feedback": feedback,
         "code_iteration": code_iteration + 1,
@@ -250,17 +275,20 @@ async def generate_prompt_node(state: AgentCreatorState) -> AgentCreatorState:
     if state.get("voice_personality"):
         voice_personality_str = json.dumps(state["voice_personality"])
 
-    system_prompt = await prompt_generator.acall(
+    result = await prompt_generator.acall(
         requirements=state["requirements"],
         plan=state["plan"],
         voice_personality=voice_personality_str,
     )
 
+    # Extract SystemPrompt object
+    system_prompt_obj = getattr(result, "system_prompt", None)
+
     logger.info("System prompt generated")
 
     return {
         **state,
-        "generated_prompt": system_prompt,
+        "generated_prompt": system_prompt_obj,
         "final_agent_code": state["agent_code"],
     }
 
@@ -274,8 +302,7 @@ async def create_agent_creator_pipeline():
     # Configure DSPy LLM
     # Use DeepSeek for fast, cost-effective testing
     # Can also use: "bedrock/anthropic.claude-3-sonnet-20240229-v1:0"
-    lm = dspy.LM(model="openrouter/anthropic/claude-sonnet-4.5",
-    max_tokens=64000)
+    lm = dspy.LM(model="bedrock/amazon.nova-pro-v1:0",cache=False)
     dspy.configure(lm=lm)
     
     # Initialize MCP tools for documentation access
@@ -292,7 +319,7 @@ async def create_agent_creator_pipeline():
     # Initialize CodeGenerator and CodeReviewer with MCP tools
     code_generator = CodeGenerator(strands_mcp_tools=mcp_tools)
     code_reviewer = CodeReviewer(strands_mcp_tools=mcp_tools)
-    plan_drafter = PlanDrafter(strands_tools=mcp_tools[:2])
+    plan_drafter = PlanDrafter(strands_tools=mcp_tools)
 
     # Create the state graph
     workflow = StateGraph(AgentCreatorState)
