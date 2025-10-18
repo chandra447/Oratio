@@ -24,7 +24,7 @@ RUN uv pip install --system \
 
 # Install Strands community tools package
 RUN uv pip install --system \
-    strands-tools
+    strands-agents-tools
 
 
 # Install observability (OTEL)
