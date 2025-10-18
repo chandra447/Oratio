@@ -68,9 +68,9 @@ def lambda_handler(event, context):
                 },
             },
             storageConfiguration={
-                "type": "VECTOR_STORE",
-                "vectorStoreConfiguration": {
-                    "vectorStoreType": "S3",
+                "type": "S3_VECTORS",
+                "s3VectorsConfiguration": {
+                    "vectorBucketArn": f"arn:aws:s3:::{KB_BUCKET}",
                 },
             },
             tags={"userId": user_id, "platform": "oratio", "environment": "production"},
