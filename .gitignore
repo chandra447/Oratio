@@ -69,6 +69,5 @@ logs/
 .aws-sam/
 
 # uv
-uv.lock
 .kilocode
 .cursor
