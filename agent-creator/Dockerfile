@@ -3,16 +3,13 @@ FROM --platform=linux/arm64 ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /app
 
-# Install Node.js for MCP server (npx)
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
     ca-certificates && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
 
 # Copy uv files
 COPY pyproject.toml uv.lock ./
@@ -26,8 +23,7 @@ COPY agentcreator/ ./agentcreator/
 # Set environment variables
 ENV PYTHONPATH="/app" \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    NODE_ENV=production
+    PYTHONUNBUFFERED=1
 
 # Expose port
 EXPOSE 8080
