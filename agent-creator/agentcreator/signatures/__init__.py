@@ -19,6 +19,14 @@ from .plan_reviewer import PlanReviewerSignature
 from .code_generator import CodeGeneratorSignature
 from .code_reviewer import CodeReviewerSignature
 from .prompt_generator import PromptGeneratorSignature
+from .types import (
+    PlanReview,
+    CodeReview,
+    Requirements,
+    AgentPlan,
+    SystemPrompt,
+    CodeGenerationOutput,
+)
 
 __all__ = [
     "SOPParserSignature",
@@ -27,4 +35,10 @@ __all__ = [
     "CodeGeneratorSignature",
     "CodeReviewerSignature",
     "PromptGeneratorSignature",
+    "PlanReview",
+    "CodeReview",
+    "Requirements",
+    "AgentPlan",
+    "SystemPrompt",
+    "CodeGenerationOutput",
 ]

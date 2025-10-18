@@ -2,6 +2,7 @@
 
 import dspy
 from typing import Optional
+from .types import Requirements
 
 
 class SOPParserSignature(dspy.Signature):
@@ -19,7 +20,7 @@ Consider the knowledge_base_description to understand when the agent should quer
 
 If voice_personality is provided, incorporate those personality traits into your requirements analysis.
 
-Output a well-structured JSON object with clear, actionable requirements that a developer can use to build the agent."""
+Output a well-structured Requirements object with clear, actionable requirements that a developer can use to build the agent."""
 
     sop: str = dspy.InputField(desc="Standard Operating Procedure text")
     knowledge_base_description: str = dspy.InputField(
@@ -30,6 +31,6 @@ Output a well-structured JSON object with clear, actionable requirements that a 
         desc="Voice personality configuration (JSON)", default=None
     )
 
-    requirements: str = dspy.OutputField(
-        desc="Structured requirements in JSON format with fields: core_goal, requires_escalation, integration_needed, knowledge_domains, tone, personality_traits"
+    requirements: Requirements = dspy.OutputField(
+        desc="Structured requirements with fields: core_goal, requires_escalation, integration_needed, knowledge_domains, tone, personality_traits"
     )

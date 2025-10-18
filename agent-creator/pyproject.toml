@@ -30,6 +30,9 @@ dependencies = [
     "lxml>=4.9.0",
     "mcp>=1.16.0",
     "mlflow>=3.4.0",
+    "langfuse>=3.6.2",
+    "openinference-instrumentation-dspy>=0.1.30",
+    "strands-agents-tools>=0.2.11",
 ]
 
 [tool.setuptools.packages.find]
