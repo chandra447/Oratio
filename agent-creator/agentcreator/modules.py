@@ -20,6 +20,14 @@ from .signatures import (
     PromptGeneratorSignature,
     SOPParserSignature,
 )
+from .signatures.types import (
+    PlanReview,
+    CodeReview,
+    Requirements,
+    AgentPlan,
+    SystemPrompt,
+    CodeGenerationOutput,
+)
 from .tools import execute_python_code, validate_python_syntax
 
 logger = logging.getLogger(__name__)
@@ -33,7 +41,7 @@ class SOPParser(dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.parser = dspy.ChainOfThought(SOPParserSignature)
+        self.parser = dspy.Predict(SOPParserSignature)
 
     async def aforward(
         self,
@@ -41,8 +49,8 @@ class SOPParser(dspy.Module):
         knowledge_base_description: str,
         human_handoff_description: str,
         voice_personality: Optional[str] = None,
-    ) -> str:
-        """Parse SOP and return structured requirements as JSON string
+    ) -> Requirements:
+        """Parse SOP and return structured requirements as Requirements object
         
         Args:
             sop: Standard Operating Procedure text
@@ -51,7 +59,7 @@ class SOPParser(dspy.Module):
             voice_personality: Optional voice personality config (JSON string)
             
         Returns:
-            JSON string with structured requirements
+            Requirements object with structured requirements
         """
         result = await self.parser.acall(
             sop=sop,
@@ -67,10 +75,10 @@ class PlanDrafter(dspy.Module):
     
     Uses ChainOfThought for systematic planning , leverage the strands documentation tools
     which can help you be grounded to how the agentcore implmenetation is.
-    For a practical example of how to work with agentcore 
-    refer to the docs link : https://strandsagents.com/latest/documentation/docs/user-guide/deploy/deploy_to_bedrock_agentcore/
+    For a practical example of how to work with agentcore
+    refer to the docs link : https://strandsagents.com/latest/documentation/docs/user-guide/deploy/deploy_to_bedrock_agentcore/index.md
     by providing to the tools avilable to you.
-    And also refer to https://strandsagents.com/latest/documentation/docs/user-guide/concepts/tools/community-tools-package/
+    And also refer to https://strandsagents.com/latest/documentation/docs/user-guide/concepts/tools/community-tools-package/index.md
     for avialble community tools from strands
     """
 
@@ -78,21 +86,24 @@ class PlanDrafter(dspy.Module):
         super().__init__()
         self.drafter = dspy.ReAct(PlanDrafterSignature, tools = strands_tools)
 
-    async def aforward(self, requirements: str, bedrock_knowledge_base_id: str) -> str:
+    async def aforward(self, requirements: Requirements, bedrock_knowledge_base_id: str,
+    plan_review: PlanReview = None) -> AgentPlan:
         """Draft agent architecture plan
         
         Args:
-            requirements: Structured requirements (JSON string)
+            requirements: Structured requirements (Requirements object)
             bedrock_knowledge_base_id: Bedrock KB ID for integration
             
         Returns:
-            JSON string with agent architecture plan
+            AgentPlan object with agent architecture plan
         """
+        
         result = await self.drafter.acall(
             requirements=requirements,
             bedrock_knowledge_base_id=bedrock_knowledge_base_id,
+            plan_review = plan_review
         )
-        return result.plan
+        return result
 
 
 class PlanReviewer(dspy.Module):
@@ -103,25 +114,30 @@ class PlanReviewer(dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.reviewer = dspy.ChainOfThought(PlanReviewerSignature)
+        self.reviewer = dspy.Predict(PlanReviewerSignature)
 
-    async def aforward(self, plan: str, requirements: str, review_iteration: int) -> str:
+    async def aforward(self, plan: AgentPlan, 
+        requirements: Requirements,
+        review_iteration: int) -> dspy.Prediction:
         """Review agent plan and provide feedback
         
         Args:
-            plan: Agent architecture plan (JSON string)
-            requirements: Original requirements (JSON string)
+            plan: Agent architecture plan (AgentPlan object)
+            requirements: Original requirements (Requirements object)
             review_iteration: Current iteration number
             
         Returns:
-            JSON string with review feedback
+            dspy.Prediction with both approved and review fields
         """
+        
         result = await self.reviewer.acall(
             plan=plan,
             requirements=requirements,
-            review_iteration=str(review_iteration),
+            review_iteration=review_iteration,
         )
-        return result.review
+        
+        # Return the full result so both approved and review are available
+        return result
 
 
 class CodeGenerator(dspy.Module):
@@ -155,13 +171,13 @@ class CodeGenerator(dspy.Module):
 
     async def aforward(
         self,
-        plan: str,
-        requirements: str,
+        plan: AgentPlan,
+        requirements: Requirements,
         bedrock_knowledge_base_id: str,
         code_review_feedback: str = "",
         model_id: str = "amazon.nova-pro-v1:0",
         enable_memory_hooks: bool = True,
-    ) -> dspy.Signature:
+    ) -> CodeGenerationOutput:
         """Generate Strands agent code with validation
         
         The ReAct module will:
@@ -172,21 +188,22 @@ class CodeGenerator(dspy.Module):
         5. Iterate based on tool feedback
         
         Args:
-            plan: Approved architecture plan (JSON string)
-            requirements: Original requirements (JSON string)
+            plan: Approved architecture plan (AgentPlan object)
+            requirements: Original requirements (Requirements object)
             bedrock_knowledge_base_id: Bedrock KB ID for integration
-            tool_configurations: Tool-specific configuration dict
+            code_review_feedback: Feedback from previous code review
             model_id: Bedrock foundation model identifier
-            enable_memory_hooks: Whether hook-based memory persistence must be implemented
+            enable_memory_hooks: Whether hook-based memory persistence must be implemented but not Session Manager
             
         Returns:
-            Signature output containing agent code, validation status, documentation references, and implementation notes
+            CodeGenerationOutput object containing agent code, validation status, documentation references, and implementation notes
         """
         logger.info("Generating code with ReAct (reasoning + tool usage)...")
         logger.info(
             "Available tools: validate_python_syntax, execute_python_code%s",
             " + MCP tooling" if self.generator.tools and len(self.generator.tools) > 2 else "",
         )
+
 
         result = await self.generator.acall(
             plan=plan,
@@ -199,10 +216,10 @@ class CodeGenerator(dspy.Module):
         
         logger.info(
             "Code generation complete (validation_status=%s, documentation_refs=%d)",
-            getattr(result, "validation_status", "unknown"),
-            len(getattr(result, "documentation_references", []) or []),
+            getattr(result.output, "validation_status", "unknown") if hasattr(result, 'output') else "unknown",
+            len(getattr(result.output, "documentation_references", []) if hasattr(result, 'output') else []),
         )
-        return result
+        return  result
 
 
 class CodeReviewer(dspy.Module):
@@ -230,7 +247,7 @@ class CodeReviewer(dspy.Module):
             max_iters=10,  # Increased to handle potential formatting issues
         )
 
-    async def aforward(self, agent_code: str, plan: str, requirements: str) -> str:
+    async def aforward(self, agent_code: str, plan: AgentPlan, requirements: Requirements) -> CodeReview:
         """Review generated code for quality and correctness
         
         The ReAct module will:
@@ -242,11 +259,11 @@ class CodeReviewer(dspy.Module):
         
         Args:
             agent_code: Generated Python code
-            plan: Original architecture plan (JSON string)
-            requirements: Original requirements (JSON string)
+            plan: Original architecture plan (AgentPlan object)
+            requirements: Original requirements (Requirements object)
             
         Returns:
-            JSON string with code review feedback
+            CodeReview object with code review feedback
         """
         logger.info("Reviewing code with ReAct (documentation verification enabled)...")
         
@@ -257,7 +274,7 @@ class CodeReviewer(dspy.Module):
         )
         
         logger.info("Code review complete")
-        return result.review
+        return result
 
 
 class PromptGenerator(dspy.Module):
@@ -268,19 +285,20 @@ class PromptGenerator(dspy.Module):
 
     def __init__(self):
         super().__init__()
-        self.generator = dspy.ChainOfThought(PromptGeneratorSignature)
+        self.generator = dspy.Predict(PromptGeneratorSignature)
 
-    async def aforward(self, requirements: str, plan: str, voice_personality: Optional[str] = None) -> str:
+    async def aforward(self, requirements: Requirements, plan: AgentPlan, voice_personality: Optional[str] = None) -> SystemPrompt:
         """Generate system prompt for the agent
         
         Args:
-            requirements: Structured requirements (JSON string)
-            plan: Agent architecture plan (JSON string)
+            requirements: Structured requirements (Requirements object)
+            plan: Agent architecture plan (AgentPlan object)
             voice_personality: Optional voice personality config (JSON string)
             
         Returns:
-            Complete system prompt text
+            SystemPrompt object containing complete system prompt components
         """
+        
         result = await self.generator.acall(
             requirements=requirements,
             plan=plan,

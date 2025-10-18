@@ -12,9 +12,13 @@ from pydantic import BaseModel
 
 from .pipeline import create_agent_creator_pipeline
 
+# Environment configuration
+PORT = int(os.getenv("PORT", "8080"))
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -157,7 +161,15 @@ async def invoke_agent(request: InvocationRequest):
         raise
     except Exception as e:
         logger.error(f"Error processing request: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return error in AgentCore-compatible format
+        return InvocationResponse(
+            output={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "agent_code": None,
+                "generated_prompt": None,
+            }
+        )
 
 
 @app.get("/ping")

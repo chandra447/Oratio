@@ -43,8 +43,8 @@ AGENTCORE_ENABLED = os.getenv("AGENTCORE_ENABLED", "false").lower() == "true"
 EXECUTION_ROLE_ARN = os.getenv("AGENTCORE_EXECUTION_ROLE_ARN", "")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
-# Global session management
-_code_interpreter_session_id: Optional[str] = None
+# Global code interpreter ARN
+_code_interpreter_session_id: Optional[str] = None  # Actually stores ARN, not session ID
 
 # DSPy PythonInterpreter as fallback
 _dspy_interpreter: Optional[dspy.PythonInterpreter] = None
@@ -63,7 +63,7 @@ def _get_or_create_session() -> tuple[boto3.client, str]:
     """Get or create a code interpreter session
     
     Returns:
-        Tuple of (client, session_id)
+        Tuple of (client, code_interpreter_arn)
     """
     global _code_interpreter_session_id
     
@@ -72,45 +72,52 @@ def _get_or_create_session() -> tuple[boto3.client, str]:
     # Reuse existing session if available
     if _code_interpreter_session_id:
         try:
-            # Verify session is still valid
-            client.get_code_interpreter_session(sessionId=_code_interpreter_session_id)
-            logger.info(f"Reusing existing session: {_code_interpreter_session_id}")
+            # Verify code interpreter is still valid
+            client.get_code_interpreter(codeInterpreterArn=_code_interpreter_session_id)
+            logger.info(f"Reusing existing code interpreter: {_code_interpreter_session_id}")
             return client, _code_interpreter_session_id
         except Exception as e:
-            logger.warning(f"Existing session invalid, creating new one: {e}")
+            logger.warning(f"Existing code interpreter invalid, creating new one: {e}")
             _code_interpreter_session_id = None
     
-    # Create new session
+    # Create new code interpreter
     try:
         response = client.create_code_interpreter(
-            SessionConfiguration={
-                'networkConfig': {
-                    'type': 'SANDBOX'  # Secure sandboxed environment
-                },
-                'executionRole': EXECUTION_ROLE_ARN,
-                'memoryMb': 2048,  # 2GB memory for code execution
-            }
+            codeInterpreterName=f"agentcreator-validator-{os.getpid()}",
+            networkConfiguration={
+                'networkMode': 'PUBLIC'  # Or 'VPC' if you have VPC config
+            },
+            roleArn=EXECUTION_ROLE_ARN,
         )
-        _code_interpreter_session_id = response['sessionId']
-        logger.info(f"Created new code interpreter session: {_code_interpreter_session_id}")
+        _code_interpreter_session_id = response['codeInterpreterArn']
+        logger.info(f"Created new code interpreter: {_code_interpreter_session_id}")
+        
+        # Wait for code interpreter to be available
+        try:
+            waiter = client.get_waiter('code_interpreter_available')
+            waiter.wait(codeInterpreterArn=_code_interpreter_session_id)
+            logger.info("Code interpreter is now available")
+        except Exception as wait_error:
+            logger.warning(f"Waiter not available or failed: {wait_error}")
+        
         return client, _code_interpreter_session_id
         
     except Exception as e:
-        logger.error(f"Failed to create code interpreter session: {e}")
+        logger.error(f"Failed to create code interpreter: {e}")
         raise
 
 
 def cleanup_session():
-    """Cleanup code interpreter session"""
+    """Cleanup code interpreter"""
     global _code_interpreter_session_id
     
     if _code_interpreter_session_id:
         try:
             client = boto3.client('bedrock-agentcore-control', region_name=AWS_REGION)
-            client.delete_code_interpreter_session(sessionId=_code_interpreter_session_id)
-            logger.info(f"Cleaned up session: {_code_interpreter_session_id}")
+            client.delete_code_interpreter(codeInterpreterArn=_code_interpreter_session_id)
+            logger.info(f"Cleaned up code interpreter: {_code_interpreter_session_id}")
         except Exception as e:
-            logger.warning(f"Failed to cleanup session: {e}")
+            logger.warning(f"Failed to cleanup code interpreter: {e}")
         finally:
             _code_interpreter_session_id = None
 
@@ -157,51 +164,30 @@ def execute_python_code(code: str, description: str = "") -> str:
             return f"✗ Validation error: {str(e)}"
     
     # Use AgentCore Code Interpreter (production)
+    # Note: Code Interpreter execution is NOT via invoke_code_interpreter
+    # Instead, you would use the Bedrock Runtime API with the code interpreter
+    # However, for AgentCreator's use case (validation only), we'll use syntax validation
+    logger.warning("AgentCore Code Interpreter execution not yet implemented in control plane")
+    logger.info("Falling back to syntax validation + DSPy execution")
+    
     try:
-        # Add description as comment if provided
-        if description:
-            code = f"# {description}\n{code}"
+        # First, validate syntax
+        import ast
+        ast.parse(code)
+        logger.info("Code syntax validation successful")
         
-        logger.info(f"Executing code via AgentCore: {description}")
+        # Then execute with DSPy for full validation
+        interpreter = _get_dspy_interpreter()
+        result = interpreter.execute(code)
+        logger.info("DSPy execution successful")
+        return f"✓ Code validated and executed successfully:\n{result}"
         
-        # Get or create session
-        client, session_id = _get_or_create_session()
-        
-        # Execute code
-        exec_response = client.invoke_code_interpreter(
-            sessionId=session_id,
-            code=code,
-            language="python"
-        )
-        
-        # Extract and format results
-        if 'output' in exec_response:
-            output = exec_response['output']
-            logger.info("AgentCore execution successful")
-            return f"✓ Execution successful:\n{output}"
-            
-        elif 'error' in exec_response:
-            error = exec_response['error']
-            logger.warning(f"AgentCore execution error: {error}")
-            return f"✗ Execution error:\n{error}"
-            
-        else:
-            result = exec_response.get('result', 'Execution completed')
-            logger.info("AgentCore execution completed")
-            return f"✓ {result}"
-        
+    except SyntaxError as e:
+        logger.warning(f"Syntax error: {e}")
+        return f"✗ Syntax Error at line {e.lineno}: {e.msg}"
     except Exception as e:
-        logger.error(f"AgentCore error, falling back to DSPy: {e}")
-        
-        # Fallback to DSPy interpreter if AgentCore fails
-        try:
-            interpreter = _get_dspy_interpreter()
-            result = interpreter.execute(code)
-            logger.info("Fallback to DSPy successful")
-            return f"✓ Execution successful (fallback):\n{result}"
-        except Exception as fallback_error:
-            logger.error(f"Fallback execution also failed: {fallback_error}")
-            return f"✗ Execution failed: {str(e)}\nFallback also failed: {str(fallback_error)}"
+        logger.error(f"Execution error: {e}")
+        return f"✗ Execution error: {str(e)}"
 
 
 def validate_python_syntax(code: str) -> str:

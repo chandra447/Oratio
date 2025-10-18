@@ -32,5 +32,16 @@ ENV PYTHONPATH="/app" \
 # Expose port
 EXPOSE 8080
 
+# Add health check for AgentCore runtime monitoring
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8080/ping || exit 1
+
+# Create non-root user for security
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
+
 # Run application with OpenTelemetry instrumentation
 CMD ["uv", "run", "opentelemetry-instrument", "uvicorn", "agentcreator.agent_runtime:app", "--host", "0.0.0.0", "--port", "8080"]

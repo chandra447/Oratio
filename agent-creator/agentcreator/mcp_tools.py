@@ -36,9 +36,9 @@ async def initialize_mcp_server(
     """Initialize an MCP server and get tools
     
     Args:
-        server_name: Name of the MCP server (for logging)
+        server_name: Name of MCP server (for logging)
         command: Command to run (e.g., "uvx")
-        args: Arguments for the command
+        args: Arguments for command
         env: Optional environment variables
     
     Returns:
@@ -58,33 +58,51 @@ async def initialize_mcp_server(
     exit_stack = AsyncExitStack()
     
     try:
-        # Enter the stdio_client context
+        # Enter stdio_client context
         read, write = await exit_stack.enter_async_context(stdio_client(server_params))
         
         # Create and enter session context
         session = ClientSession(read, write)
         await exit_stack.enter_async_context(session)
         
-        # Initialize connection
-        await session.initialize()
+        # Initialize connection with timeout
+        try:
+            await asyncio.wait_for(session.initialize(), timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout initializing {server_name} MCP server")
+            await exit_stack.aclose()
+            raise
         
-        # List available tools
-        mcp_tools = await session.list_tools()
+        # List available tools with timeout
+        try:
+            mcp_tools = await asyncio.wait_for(session.list_tools(), timeout=10.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout listing tools from {server_name} MCP server")
+            await exit_stack.aclose()
+            raise
         
         # Convert MCP tools to DSPy tools
         # DSPy's from_mcp_tool creates async tools that work with async modules
         for mcp_tool in mcp_tools.tools:
-            # Correct order: session first, then tool
-            dspy_tool = dspy.Tool.from_mcp_tool(session, mcp_tool)
-            tools.append(dspy_tool)
+            try:
+                # Correct order: session first, then tool
+                dspy_tool = dspy.Tool.from_mcp_tool(session, mcp_tool)
+                tools.append(dspy_tool)
+            except Exception as e:
+                logger.warning(f"Failed to convert tool {mcp_tool.name} from {server_name}: {e}")
+                continue
         
         logger.info(f"Loaded {len(tools)} tools from {server_name} MCP server")
         
         return tools, session, exit_stack
         
     except Exception as e:
+        logger.error(f"Failed to initialize {server_name} MCP server: {e}")
         # Clean up on error
-        await exit_stack.aclose()
+        try:
+            await exit_stack.aclose()
+        except:
+            pass
         raise
 
 
@@ -124,7 +142,7 @@ async def get_all_mcp_tools(force_reload: bool = False, strands_only = False) ->
     """Get all MCP tools from both Strands and AWS Documentation servers
     
     Uses uvx 
-    Caches the tools globally to avoid creating multiple sessions.
+    Caches tools globally to avoid creating multiple sessions.
     
     Args:
         force_reload: If True, force reload even if tools are cached
@@ -189,7 +207,7 @@ async def cleanup_mcp_sessions():
     
     Note: Due to async context manager limitations, cleanup may fail if called
     from a different async context than where sessions were created. This is
-    expected behavior and the sessions will be cleaned up when the process exits.
+    expected behavior and sessions will be cleaned up when process exits.
     """
     global _mcp_sessions, _exit_stacks, _mcp_tools
     
