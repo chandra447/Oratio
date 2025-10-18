@@ -42,6 +42,29 @@ def wait_for_runtime(client, runtime_arn: str, max_wait: int = 300) -> bool:
     return False
 
 
+def sanitize_runtime_name(name: str) -> str:
+    """
+    Sanitize runtime name to meet AWS requirements:
+    - Must start with a letter
+    - Can only contain letters, numbers, and underscores
+    - Pattern: [a-zA-Z][a-zA-Z0-9_]{0,47}
+    """
+    # Replace hyphens with underscores
+    sanitized = name.replace('-', '_')
+    
+    # Ensure it starts with a letter
+    if not sanitized[0].isalpha():
+        sanitized = 'agent_' + sanitized
+    
+    # Remove any invalid characters
+    sanitized = ''.join(c for c in sanitized if c.isalnum() or c == '_')
+    
+    # Truncate to 48 characters max
+    sanitized = sanitized[:48]
+    
+    return sanitized
+
+
 def deploy_agentcore(
     name: str,
     image_uri: str,
@@ -51,6 +74,11 @@ def deploy_agentcore(
     region: str = "us-east-1",
 ) -> str:
     """Deploy or update AgentCore Runtime"""
+    # Sanitize the name to meet AWS naming requirements
+    sanitized_name = sanitize_runtime_name(name)
+    if sanitized_name != name:
+        logger.info(f"Sanitized runtime name: '{name}' -> '{sanitized_name}'")
+    
     client = boto3.client('bedrock-agentcore-control', region_name=region)
     
     # Build container configuration
@@ -70,13 +98,13 @@ def deploy_agentcore(
     }
     
     # Check if runtime exists
-    logger.info(f"Checking if runtime '{name}' exists...")
+    logger.info(f"Checking if runtime '{sanitized_name}' exists...")
     try:
         response = client.list_agent_runtimes()
         existing_runtime = None
         
         for runtime in response.get('agentRuntimes', []):
-            if runtime.get('agentRuntimeName') == name:
+            if runtime.get('agentRuntimeName') == sanitized_name:
                 existing_runtime = runtime.get('agentRuntimeArn')
                 break
         
@@ -99,8 +127,8 @@ def deploy_agentcore(
             logger.info("Runtime not found, creating new one...")
             
             response = client.create_agent_runtime(
-                agentRuntimeName=name,
-                description=description or f"AgentCore runtime: {name}",
+                agentRuntimeName=sanitized_name,
+                description=description or f"AgentCore runtime: {sanitized_name}",
                 agentRuntimeArtifact=artifact,
                 networkConfiguration=network_config,
                 roleArn=role_arn
