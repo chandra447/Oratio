@@ -35,24 +35,31 @@ class ComputeConstruct(Construct):
             },
         )
 
-        # Grant permissions
+        # Grant permissions for DynamoDB and S3
         agents_table.grant_read_write_data(self.kb_provisioner)
         knowledge_bases_table.grant_read_write_data(self.kb_provisioner)
         kb_bucket.grant_read(self.kb_provisioner)
 
-        # Grant Bedrock Knowledge Base permissions (permissive for hackathon)
+        # --- START: UPDATED PERMISSIONS FOR KB PROVISIONER ---
+        # This single policy statement provides all necessary permissions for the Lambda
+        # to create a Bedrock Knowledge Base and its required IAM service role.
         self.kb_provisioner.add_to_role_policy(
             iam.PolicyStatement(
-                actions=["bedrock:*"],
+                sid="BedrockKBProvisioningPermissions",
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    # Allows creating, deleting, and managing knowledge bases
+                    "bedrock:*",
+                    # Allows creating the service role that Bedrock will use
+                    "iam:CreateRole",
+                    "iam:AttachRolePolicy",
+                    # Allows passing the newly created role to the Bedrock service
+                    "iam:PassRole",
+                ],
+                # Using "*" for resources is okay for a hackathon, but scope this down in production
                 resources=["*"],
-            )
-        )
-        
-        # Grant IAM PassRole permission for KB role
-        self.kb_provisioner.add_to_role_policy(
-            iam.PolicyStatement(
-                actions=["iam:PassRole"],
-                resources=["*"],
+                # IMPORTANT: This condition secures iam:PassRole, ensuring the role is only
+                # passed to the intended AWS service (Bedrock).
                 conditions={
                     "StringEquals": {
                         "iam:PassedToService": "bedrock.amazonaws.com"
@@ -60,6 +67,7 @@ class ComputeConstruct(Construct):
                 }
             )
         )
+        # --- END: UPDATED PERMISSIONS ---
 
         # AgentCreator Invoker Lambda
         self.agentcreator_invoker = lambda_.Function(
