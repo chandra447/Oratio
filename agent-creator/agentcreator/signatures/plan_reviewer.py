@@ -1,42 +1,72 @@
-"""PlanReviewer Signature - Reviews and critiques agent architecture plan"""
-
 import dspy
-
+from .types import PlanReview, AgentPlan, Requirements
 
 class PlanReviewerSignature(dspy.Signature):
-    """You are a senior AI architect conducting a thorough review of an agent architecture plan. This is review iteration {review_iteration}.
+    """You are a senior Strands agent architect. Review and critique the submitted agent architecture plan for both technical and business adequacy. This is review iteration {review_iteration}.
 
-Your task is to critically evaluate the plan against the original requirements and provide constructive feedback.
+**Evaluation Criteria:**
 
-Evaluate the plan on these criteria:
+1. **Requirements Alignment**:
+   - Does the plan *fully* address all original requirements (including SOP, user voice/personality, memory, escalation)?
+   - Clearly cite any requirements not addressed or inadequately addressed.
 
-1. **Requirements Alignment**: Does the plan address all requirements? Are there any gaps?
+2. **Tool Use & Integration**:
+   - Are *only* strands_agents_tools community tools included?
+   - Is knowledge base access handled via 'retrieve' with correct configuration (KNOWLEDGE_BASE_ID)?
+   - Memory strategy should be a dict: {"type": "chameleon_injected", "description": "Memory handled by Chameleon via injected hooks", "implementation": "..."}
+   - Plan should NOT include AgentCoreMemorySessionManager or any memory code (Chameleon handles this)
+   - No custom/external tools or manual API/KB calls!
 
-2. **Completeness**: Are all necessary components included (agent structure, tools, reasoning, error handling)?
+3. **Architecture Soundness**:
+   - Is the structure correct for the specified agent type (single/multi-agent)?
+   - If multi-agent, are handoff patterns, agent roles, and responsibilities clear?
 
-3. **Technical Soundness**: Is the architecture feasible? Are the tools and integrations appropriate?
+4. **System Prompt Outline Quality**:
+   - Are prompt sections complete (role, scope, tool usage, behavioral/personality, error handling)?
+   - Is the system prompt ready to guide codegen as intended?
 
-4. **Personality Implementation**: Is the personality properly integrated into the design?
+5. **Completeness & Extensibility**:
+   - Are all required components included (structure, tools, interaction, memory, error handling)?
+   - Is the plan logically extensible for new requirements?
 
-5. **Scalability & Maintainability**: Is the design extensible and well-structured?
+6. **Error Handling and Recovery**:
+   - Are fallback and escalation triggers specifically listed and realistic?
 
-For each criterion, identify:
-- **Strengths**: What is done well
-- **Weaknesses**: What needs improvement
-- **Suggestions**: Specific actionable improvements
-- **Missing Elements**: What is completely absent but needed
+**Review Output:**
+- For each criterion: list Strengths, Weaknesses, Suggestions, and Missing Elements (if any).
+- Each suggestion must be concrete and actionable (e.g., “Add retrieve tool for KB lookups configured via KNOWLEDGE_BASE_ID”), not just “specify better error handling.”
+- If this is review iteration 2 or 3 and the plan is 'good enough', you may be more lenient and approve if remaining issues are minor.
 
-Based on your evaluation, decide whether to approve the plan (approved: true) or request revisions (approved: false).
+**APPROVAL:**
+- Set 'approved' to True if the plan is complete, safe, compliant, and ready for codegen.
+- Set 'approved' to False if there are any *gaps in requirements, incorrect tool usage, missing error handling, or technical flaws* that would block successful code generation or deployment.
 
-Be thorough but constructive. If this is iteration 2 or 3, be more lenient if the plan is mostly good.
+**OUTPUT:**
+Return a PlanReview object with:
+- strengths: list of what is done well (be specific)
+- weaknesses: list of improvement areas (with rationale)
+- suggestions: list of actionable fixes/changes
+- missing_elements: list of any required items absent from the plan.
+Do NOT include 'approved' in this object—return that via the separate field.
 
-Output a JSON object with your review."""
+Be direct: always state if tool usage or deployment pattern deviates from Strands/AgentCore best practices!
 
-    plan: str = dspy.InputField(desc="Agent architecture plan to review")
-    requirements: str = dspy.InputField(desc="Original requirements for validation")
-    review_iteration: str = dspy.InputField(desc="Current review iteration number")
-    
-    approved: bool = dspy.OutputField(desc="Boolean indicating if the plan is approved (true) or needs revision (false)")
-    review: str = dspy.OutputField(
-        desc="Review feedback in JSON format with fields: strengths (list), weaknesses (list), suggestions (list), missing_elements (list). Do NOT include 'approved' in this JSON - it's a separate field."
+**Documentation References for Review:**
+- [Tools Overview](https://strandsagents.com/latest/documentation/docs/user-guide/concepts/tools/tools_overview/index.md) - Validate tool selections
+- [Community Tools Package](https://strandsagents.com/latest/documentation/docs/user-guide/concepts/tools/community-tools-package/index.md) - Verify community tool usage
+- [Session Management](https://strandsagents.com/latest/documentation/docs/user-guide/concepts/agents/session-management/index.md) - Validate memory strategies
+- [Agents as Tools](https://strandsagents.com/latest/documentation/docs/user-guide/concepts/multi-agent/agents-as-tools/index.md) - Validate multi-agent patterns
+- [Multi-Agent Patterns](https://strandsagents.com/latest/documentation/docs/user-guide/concepts/multi-agent/multi-agent-patterns/index.md) - Review orchestration approaches
+- [Deployment Patterns](https://strandsagents.com/latest/documentation/docs/user-guide/deploy/deploy_to_bedrock_agentcore/index.md) - Validate deployment plans
+- [Operating Agents in Production](https://strandsagents.com/latest/documentation/docs/user-guide/deploy/operating-agents-in-production/index.md) - Review production readiness
+- AgentCore Memory API: https://aws.github.io/bedrock-agentcore-starter-toolkit/api-reference/memory.md - Validate AgentCore memory integration
+- AgentCore Session Management: https://aws.github.io/bedrock-agentcore-starter-toolkit/examples/session-management.md - Validate session management patterns
+"""
+    plan: AgentPlan = dspy.InputField(desc="Agent architecture plan to review")
+    requirements: Requirements = dspy.InputField(desc="Original business, technical, and UX requirements")
+    review_iteration: int = dspy.InputField(desc="Review cycle/iteration number")
+
+    review: PlanReview = dspy.OutputField(
+        desc="Structured feedback with: strengths, weaknesses, suggestions, and missing_elements. No approval in this object."
     )
+    approved: bool = dspy.OutputField(desc="True if plan is ready for code generation; False if critical issues remain.")
