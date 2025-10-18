@@ -67,8 +67,8 @@ jobs:
         run: npm install -g aws-cdk
       
       - name: Install Python dependencies with uv
-        working-directory: infrastructure
         run: |
+          cd infrastructure
           uv sync --frozen
           echo "✓ Infrastructure dependencies installed"
       
