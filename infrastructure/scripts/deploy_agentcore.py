@@ -26,12 +26,17 @@ def wait_for_runtime(client, runtime_arn: str, max_wait: int = 300) -> bool:
     while time.time() - start_time < max_wait:
         try:
             response = client.get_agent_runtime(agentRuntimeId=runtime_id)
-            status = response.get('agentRuntime', {}).get('status')
             
-            if status == 'AVAILABLE':
-                logger.info("✓ Runtime is now AVAILABLE")
+            # Debug: Log the full response structure
+            logger.debug(f"Full response: {json.dumps(response, default=str, indent=2)}")
+            
+            # The status is at the top level, not nested under 'agentRuntime'
+            status = response.get('status')
+            
+            if status == 'READY':
+                logger.info("✓ Runtime is now READY")
                 return True
-            elif status in ['FAILED', 'DELETING']:
+            elif status in ['CREATE_FAILED', 'UPDATE_FAILED', 'DELETING']:
                 logger.error(f"✗ Runtime in failed state: {status}")
                 return False
             
