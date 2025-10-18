@@ -127,6 +127,21 @@ class AgentCoreRolesConstruct(Construct):
             )
         )
 
+        # ECR Access - Pull Docker images for AgentCore runtime
+        self.chameleon_execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="ECRImagePull",
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchGetImage",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchCheckLayerAvailability",
+                ],
+                resources=["*"],  # GetAuthorizationToken doesn't support resource-level permissions
+            )
+        )
+
         # AgentCreator Meta-Agent Execution Role
         # This role is used by the AgentCreator meta-agent runtime
         self.agentcreator_execution_role = iam.Role(
@@ -177,6 +192,21 @@ class AgentCoreRolesConstruct(Construct):
                     "xray:PutTelemetryRecords",
                 ],
                 resources=["*"],
+            )
+        )
+
+        # ECR Access - Pull Docker images for AgentCore runtime
+        self.agentcreator_execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="ECRImagePull",
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchGetImage",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchCheckLayerAvailability",
+                ],
+                resources=["*"],  # GetAuthorizationToken doesn't support resource-level permissions
             )
         )
 
