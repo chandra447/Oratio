@@ -101,27 +101,31 @@ def deploy_agentcore(
     logger.info(f"Checking if runtime '{sanitized_name}' exists...")
     try:
         response = client.list_agent_runtimes()
-        existing_runtime = None
+        existing_runtime_arn = None
+        existing_runtime_id = None
         
         for runtime in response.get('agentRuntimes', []):
             if runtime.get('agentRuntimeName') == sanitized_name:
-                existing_runtime = runtime.get('agentRuntimeArn')
+                existing_runtime_arn = runtime.get('agentRuntimeArn')
+                # Extract runtime ID from ARN: arn:aws:bedrock-agentcore:region:account:runtime/runtime-id
+                existing_runtime_id = existing_runtime_arn.split('/')[-1]
                 break
         
-        if existing_runtime:
-            logger.info(f"Found existing runtime: {existing_runtime}")
+        if existing_runtime_arn:
+            logger.info(f"Found existing runtime: {existing_runtime_arn}")
+            logger.info(f"Runtime ID: {existing_runtime_id}")
             logger.info("Updating runtime...")
             
             client.update_agent_runtime(
-                agentRuntimeArn=existing_runtime,
+                agentRuntimeId=existing_runtime_id,
                 agentRuntimeArtifact=artifact,
                 networkConfiguration=network_config,
                 roleArn=role_arn
             )
             
-            logger.info(f"✓ Updated runtime: {existing_runtime}")
-            wait_for_runtime(client, existing_runtime)
-            return existing_runtime
+            logger.info(f"✓ Updated runtime: {existing_runtime_arn}")
+            wait_for_runtime(client, existing_runtime_arn)
+            return existing_runtime_arn
         
         else:
             logger.info("Runtime not found, creating new one...")
