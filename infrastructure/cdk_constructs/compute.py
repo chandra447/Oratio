@@ -40,26 +40,30 @@ class ComputeConstruct(Construct):
         knowledge_bases_table.grant_read_write_data(self.kb_provisioner)
         kb_bucket.grant_read(self.kb_provisioner)
 
-        # --- START: UPDATED PERMISSIONS FOR KB PROVISIONER ---
-        # This single policy statement provides all necessary permissions for the Lambda
-        # to create a Bedrock Knowledge Base and its required IAM service role.
+        # --- START: CORRECTED PERMISSIONS FOR KB PROVISIONER ---
+        # Policy for direct Bedrock and IAM actions that the Lambda needs to call
+        # NOTE: The condition must NOT be applied to these actions, or they will fail
         self.kb_provisioner.add_to_role_policy(
             iam.PolicyStatement(
-                sid="BedrockKBProvisioningPermissions",
+                sid="BedrockAndIamActions",
                 effect=iam.Effect.ALLOW,
                 actions=[
-                    # Allows creating, deleting, and managing knowledge bases
-                    "bedrock:*",
-                    # Allows creating the service role that Bedrock will use
-                    "iam:CreateRole",
-                    "iam:AttachRolePolicy",
-                    # Allows passing the newly created role to the Bedrock service
-                    "iam:PassRole",
+                    "bedrock:*",          # Allows creating, managing KBs
+                    "iam:CreateRole",     # Allows creating the service role for Bedrock
+                    "iam:AttachRolePolicy" # Allows attaching policies to that role
                 ],
-                # Using "*" for resources is okay for a hackathon, but scope this down in production
-                resources=["*"],
-                # IMPORTANT: This condition secures iam:PassRole, ensuring the role is only
-                # passed to the intended AWS service (Bedrock).
+                resources=["*"], # Scope down in production if possible
+            )
+        )
+
+        # A separate, dedicated policy to securely grant PassRole
+        # This condition only applies to PassRole, not to the other actions
+        self.kb_provisioner.add_to_role_policy(
+            iam.PolicyStatement(
+                sid="SecurePassRoleForBedrock",
+                effect=iam.Effect.ALLOW,
+                actions=["iam:PassRole"],
+                resources=["*"], # You can scope this to the specific role ARN pattern
                 conditions={
                     "StringEquals": {
                         "iam:PassedToService": "bedrock.amazonaws.com"
@@ -67,7 +71,12 @@ class ComputeConstruct(Construct):
                 }
             )
         )
-        # --- END: UPDATED PERMISSIONS ---
+        
+        # Attach AWS managed policy for comprehensive Bedrock access
+        self.kb_provisioner.role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess")
+        )
+        # --- END: CORRECTED PERMISSIONS ---
 
         # AgentCreator Invoker Lambda
         self.agentcreator_invoker = lambda_.Function(
