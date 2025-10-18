@@ -11,6 +11,7 @@ class AgentCoreRolesConstruct(Construct):
         scope: Construct,
         construct_id: str,
         code_bucket: s3.Bucket,
+        kb_bucket: s3.Bucket,
         agents_table,
         **kwargs,
     ) -> None:
@@ -42,6 +43,23 @@ class AgentCoreRolesConstruct(Construct):
                 resources=[
                     code_bucket.bucket_arn,
                     f"{code_bucket.bucket_arn}/*",
+                ],
+            )
+        )
+
+        # S3 Access - Read knowledge base files (for S3 vector store)
+        self.chameleon_execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="S3AccessForKnowledgeBase",
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:ListBucket",
+                ],
+                resources=[
+                    kb_bucket.bucket_arn,
+                    f"{kb_bucket.bucket_arn}/*",
                 ],
             )
         )

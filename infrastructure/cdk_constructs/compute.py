@@ -40,22 +40,10 @@ class ComputeConstruct(Construct):
         knowledge_bases_table.grant_read_write_data(self.kb_provisioner)
         kb_bucket.grant_read(self.kb_provisioner)
 
-        # Grant Bedrock Knowledge Base permissions
+        # Grant Bedrock Knowledge Base permissions (permissive for hackathon)
         self.kb_provisioner.add_to_role_policy(
             iam.PolicyStatement(
-                actions=[
-                    "bedrock:CreateKnowledgeBase",
-                    "bedrock:GetKnowledgeBase",
-                    "bedrock:UpdateKnowledgeBase",
-                    "bedrock:DeleteKnowledgeBase",
-                    "bedrock:CreateDataSource",
-                    "bedrock:GetDataSource",
-                    "bedrock:UpdateDataSource",
-                    "bedrock:DeleteDataSource",
-                    "bedrock:StartIngestionJob",
-                    "bedrock:GetIngestionJob",
-                    "bedrock:ListIngestionJobs",
-                ],
+                actions=["bedrock:*"],
                 resources=["*"],
             )
         )
@@ -96,16 +84,12 @@ class ComputeConstruct(Construct):
         knowledge_bases_table.grant_read_data(self.agentcreator_invoker)
         code_bucket.grant_write(self.agentcreator_invoker)
 
-        # Grant Bedrock AgentCore Runtime permissions to invoke AgentCreator
+        # Grant Bedrock AgentCore Runtime permissions to invoke AgentCreator (permissive for hackathon)
         self.agentcreator_invoker.add_to_role_policy(
             iam.PolicyStatement(
                 actions=[
-                    "bedrock-agentcore:InvokeAgentRuntime",
-                    "bedrock:InvokeModel",
-                    "bedrock:CreateMemory",
-                    "bedrock:GetMemory",
-                    "bedrock:UpdateMemory",
-                    "bedrock:DeleteMemory",
+                    "bedrock-agentcore:*",
+                    "bedrock:*",
                 ],
                 resources=["*"],
             )
@@ -113,19 +97,6 @@ class ComputeConstruct(Construct):
 
         # Note: Removed agentcore_deployer and code_checker Lambdas
         # agentcreator_invoker now marks agents as active directly (simpler workflow)
-
-        # Add OpenSearch Serverless permissions for KB Provisioner
-        self.kb_provisioner.add_to_role_policy(
-            iam.PolicyStatement(
-                actions=[
-                    "aoss:APIAccessAll",  # OpenSearch Serverless access
-                    "aoss:CreateSecurityPolicy",
-                    "aoss:GetSecurityPolicy",
-                    "aoss:UpdateSecurityPolicy",
-                ],
-                resources=["*"],
-            )
-        )
 
         # Add S3 tagging permissions
         self.agentcreator_invoker.add_to_role_policy(

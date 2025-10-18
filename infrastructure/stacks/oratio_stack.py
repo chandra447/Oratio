@@ -41,6 +41,7 @@ class OratioStack(Stack):
             self,
             "AgentCoreRoles",
             code_bucket=storage.code_bucket,
+            kb_bucket=storage.kb_bucket,
             agents_table=database.agents_table,
         )
 

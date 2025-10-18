@@ -20,10 +20,6 @@ KB_BUCKET = os.environ.get("KB_BUCKET", "oratio-knowledge-bases")
 KB_ROLE_ARN = os.environ.get(
     "KB_ROLE_ARN", "arn:aws:iam::123456789012:role/BedrockKnowledgeBaseRole"
 )
-OPENSEARCH_COLLECTION_ARN = os.environ.get(
-    "OPENSEARCH_COLLECTION_ARN",
-    "arn:aws:aoss:us-east-1:123456789012:collection/oratio-kb",
-)
 
 
 def lambda_handler(event, context):
@@ -72,15 +68,9 @@ def lambda_handler(event, context):
                 },
             },
             storageConfiguration={
-                "type": "OPENSEARCH_SERVERLESS",
-                "opensearchServerlessConfiguration": {
-                    "collectionArn": OPENSEARCH_COLLECTION_ARN,
-                    "vectorIndexName": f"oratio-kb-{agent_id}",
-                    "fieldMapping": {
-                        "vectorField": "bedrock-knowledge-base-default-vector",
-                        "textField": "AMAZON_BEDROCK_TEXT_CHUNK",
-                        "metadataField": "AMAZON_BEDROCK_METADATA",
-                    },
+                "type": "VECTOR_STORE",
+                "vectorStoreConfiguration": {
+                    "vectorStoreType": "S3",
                 },
             },
             tags={"userId": user_id, "platform": "oratio", "environment": "production"},
