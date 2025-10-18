@@ -8,6 +8,14 @@ from .agent import (
     AgentUpdate,
     VoicePersonality,
 )
+from .api_key import (
+    APIKey,
+    APIKeyCreate,
+    APIKeyPermission,
+    APIKeyResponse,
+    APIKeyStatus,
+    APIKeyValidation,
+)
 from .knowledge_base import (
     KnowledgeBase,
     KnowledgeBaseCreate,
@@ -25,6 +33,12 @@ __all__ = [
     "AgentStatus",
     "AgentType",
     "VoicePersonality",
+    "APIKey",
+    "APIKeyCreate",
+    "APIKeyPermission",
+    "APIKeyResponse",
+    "APIKeyStatus",
+    "APIKeyValidation",
     "KnowledgeBase",
     "KnowledgeBaseCreate",
     "KnowledgeBaseUpdate",

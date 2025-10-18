@@ -70,3 +70,5 @@ logs/
 
 # uv
 uv.lock
+.kilocode
+.cursor

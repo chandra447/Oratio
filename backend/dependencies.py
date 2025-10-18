@@ -10,6 +10,8 @@ from backend.services.auth_service import AuthService
 from backend.services.agent_service import AgentService
 from backend.services.knowledge_base_service import KnowledgeBaseService
 from backend.services.s3_service import S3Service
+from backend.services.api_key_service import APIKeyService
+from backend.services.agent_invocation_service import AgentInvocationService
 from backend.aws.cognito_client import CognitoClient
 from backend.aws.dynamodb_client import DynamoDBClient
 from backend.aws.s3_client import S3Client
@@ -148,3 +150,34 @@ def get_user_id_from_token(token: str) -> str:
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+# Service dependencies
+def get_dynamodb_client() -> DynamoDBClient:
+    """Get DynamoDBClient instance"""
+    return DynamoDBClient()
+
+
+def get_agent_service(
+    dynamodb_client: Annotated[DynamoDBClient, Depends(get_dynamodb_client)]
+) -> AgentService:
+    """Get AgentService instance"""
+    return AgentService(
+        dynamodb_client=dynamodb_client,
+        table_name=settings.AGENTS_TABLE
+    )
+
+
+def get_api_key_service(
+    dynamodb_client: Annotated[DynamoDBClient, Depends(get_dynamodb_client)]
+) -> APIKeyService:
+    """Get APIKeyService instance"""
+    return APIKeyService(
+        dynamodb_client=dynamodb_client,
+        table_name=settings.API_KEYS_TABLE
+    )
+
+
+def get_agent_invocation_service() -> AgentInvocationService:
+    """Get AgentInvocationService instance"""
+    return AgentInvocationService(region=settings.BEDROCK_REGION)
