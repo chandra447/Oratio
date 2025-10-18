@@ -16,7 +16,7 @@ from .pipeline import create_agent_creator_pipeline
 PORT = int(os.getenv("PORT", "8080"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
-# Configure logging
+# Configure logging to log to stdout
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL.upper(), logging.INFO),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
