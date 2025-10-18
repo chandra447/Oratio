@@ -22,7 +22,10 @@ class AgentCoreRolesConstruct(Construct):
             self,
             "ChameleonExecutionRole",
             role_name="oratio-chameleon-execution-role",
-            assumed_by=iam.ServicePrincipal("bedrock.amazonaws.com"),
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal("bedrock.amazonaws.com"),
+                iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
+            ),
             description="Execution role for Chameleon generic loader AgentCore runtime",
         )
 
@@ -130,7 +133,10 @@ class AgentCoreRolesConstruct(Construct):
             self,
             "AgentCreatorExecutionRole",
             role_name="oratio-agentcreator-execution-role",
-            assumed_by=iam.ServicePrincipal("bedrock.amazonaws.com"),
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal("bedrock.amazonaws.com"),
+                iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"),
+            ),
             description="Execution role for AgentCreator meta-agent AgentCore runtime",
         )
 
