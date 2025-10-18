@@ -9,6 +9,7 @@ dependencies = [
     "constructs>=10.4.2",
     "aws-cdk.aws-lambda-python-alpha>=2.170.0a0",
     "jsii>=1.115.0",
+    "boto3>=1.40.55",
 ]
 
 [project.optional-dependencies]
