@@ -40,15 +40,36 @@ class ComputeConstruct(Construct):
         knowledge_bases_table.grant_read_write_data(self.kb_provisioner)
         kb_bucket.grant_read(self.kb_provisioner)
 
-        # Grant Bedrock permissions
+        # Grant Bedrock Knowledge Base permissions
         self.kb_provisioner.add_to_role_policy(
             iam.PolicyStatement(
                 actions=[
                     "bedrock:CreateKnowledgeBase",
+                    "bedrock:GetKnowledgeBase",
+                    "bedrock:UpdateKnowledgeBase",
+                    "bedrock:DeleteKnowledgeBase",
                     "bedrock:CreateDataSource",
+                    "bedrock:GetDataSource",
+                    "bedrock:UpdateDataSource",
+                    "bedrock:DeleteDataSource",
                     "bedrock:StartIngestionJob",
+                    "bedrock:GetIngestionJob",
+                    "bedrock:ListIngestionJobs",
                 ],
                 resources=["*"],
+            )
+        )
+        
+        # Grant IAM PassRole permission for KB role
+        self.kb_provisioner.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["iam:PassRole"],
+                resources=["*"],
+                conditions={
+                    "StringEquals": {
+                        "iam:PassedToService": "bedrock.amazonaws.com"
+                    }
+                }
             )
         )
 
@@ -81,6 +102,10 @@ class ComputeConstruct(Construct):
                 actions=[
                     "bedrock-agentcore:InvokeAgentRuntime",
                     "bedrock:InvokeModel",
+                    "bedrock:CreateMemory",
+                    "bedrock:GetMemory",
+                    "bedrock:UpdateMemory",
+                    "bedrock:DeleteMemory",
                 ],
                 resources=["*"],
             )
@@ -89,12 +114,14 @@ class ComputeConstruct(Construct):
         # Note: Removed agentcore_deployer and code_checker Lambdas
         # agentcreator_invoker now marks agents as active directly (simpler workflow)
 
-        # Add additional Bedrock permissions for KB Provisioner
+        # Add OpenSearch Serverless permissions for KB Provisioner
         self.kb_provisioner.add_to_role_policy(
             iam.PolicyStatement(
                 actions=[
-                    "bedrock:GetIngestionJob",
                     "aoss:APIAccessAll",  # OpenSearch Serverless access
+                    "aoss:CreateSecurityPolicy",
+                    "aoss:GetSecurityPolicy",
+                    "aoss:UpdateSecurityPolicy",
                 ],
                 resources=["*"],
             )

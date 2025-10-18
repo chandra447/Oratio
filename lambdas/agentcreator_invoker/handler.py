@@ -97,9 +97,20 @@ def lambda_handler(event, context):
         agents_table = dynamodb.Table(AGENTS_TABLE)
         agent_response = agents_table.get_item(Key={"userId": user_id, "agentId": agent_id})
 
-        voice_personality = None
+        voice_personality_text = None
         if "Item" in agent_response:
-            voice_personality = agent_response["Item"].get("voicePersonality")
+            # Get voicePersonality from DynamoDB
+            # If it's already a dict (structured), extract the text description
+            # If it's a string, use it as-is
+            voice_personality_raw = agent_response["Item"].get("voicePersonality")
+            if isinstance(voice_personality_raw, dict):
+                # If structured, try to extract a text description field
+                voice_personality_text = voice_personality_raw.get("description") or voice_personality_raw.get("text")
+                # If no description field, convert the whole dict to a readable string
+                if not voice_personality_text:
+                    voice_personality_text = json.dumps(voice_personality_raw, indent=2)
+            elif isinstance(voice_personality_raw, str):
+                voice_personality_text = voice_personality_raw
 
         # Prepare input for AgentCreator meta-agent
         agent_creator_input = {
@@ -108,7 +119,7 @@ def lambda_handler(event, context):
             "human_handoff_description": handoff_description,
             "bedrock_knowledge_base_id": bedrock_kb_id,
             "agent_id": agent_id,
-            "voice_personality": voice_personality,
+            "voice_personality_text": voice_personality_text,  # Pass as unstructured text
         }
 
         # Create session ID (must be 33+ characters for AgentCore)
