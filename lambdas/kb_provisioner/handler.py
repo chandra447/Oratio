@@ -110,12 +110,7 @@ def create_vector_bucket_and_index(kb_id: str, user_id: str) -> tuple:
         # Create S3 Vector bucket
         logger.info(f"Creating S3 Vector bucket: {vector_bucket_name}")
         bucket_response = s3vectors.create_vector_bucket(
-            vectorBucketName=vector_bucket_name,
-            tags=[
-                {"key": "userId", "value": user_id},
-                {"key": "platform", "value": "oratio"},
-                {"key": "environment", "value": "production"},
-            ],
+            vectorBucketName=vector_bucket_name
         )
         logger.info(f"Created S3 Vector bucket: {vector_bucket_name}")
         
