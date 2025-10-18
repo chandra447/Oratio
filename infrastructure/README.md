@@ -1,171 +1,216 @@
 # Oratio Infrastructure
 
-AWS CDK infrastructure code for Oratio platform using Python.
+AWS CDK infrastructure for Oratio platform with GitHub Actions CI/CD.
 
-## Overview
+## Quick Start
 
-This directory contains AWS CDK stacks that define all infrastructure resources for the Oratio platform:
+### 1. Setup AWS OIDC (One-Time)
 
-- **DynamoDB Tables**: Users, agents, sessions, API keys, notifications
-- **S3 Buckets**: Knowledge bases, generated code, recordings
-- **Cognito**: User authentication and management
-- **Lambda Functions**: KB provisioner, AgentCreator invoker, AgentCore deployer
-- **Step Functions**: Agent creation workflow orchestration
+Follow **[GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md)** for complete setup instructions.
 
-## Prerequisites
-
-- Python 3.11+
-- uv package manager
-- AWS CDK CLI (`npm install -g aws-cdk`)
-- AWS credentials configured
-
-## Installation
-
+**Quick commands**:
 ```bash
-# Install dependencies
-uv sync
+# 1. Create OIDC provider
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com \
+  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
 
-# Install dev dependencies
-uv sync --extra dev
+# 2. Create deployment role (see GITHUB_ACTIONS_SETUP.md for policy files)
+aws iam create-role --role-name GitHubActionsDeploymentRole --assume-role-policy-document file://github-actions-trust-policy.json
+
+# 3. Create AgentCore execution role
+aws iam create-role --role-name OratioAgentCoreExecutionRole --assume-role-policy-document file://agentcore-trust-policy.json
 ```
 
-## CDK Commands
+### 2. Configure GitHub Secrets
+
+In GitHub → Settings → Secrets and variables → Actions:
+
+| Name | Type | Value |
+|------|------|-------|
+| `AWS_ACCOUNT_ID` | Variable | Your AWS account ID |
+| `AWS_ROLE_ARN` | Secret | `arn:aws:iam::ACCOUNT_ID:role/GitHubActionsDeploymentRole` |
+| `AGENTCORE_EXECUTION_ROLE_ARN` | Secret | `arn:aws:iam::ACCOUNT_ID:role/OratioAgentCoreExecutionRole` |
+
+### 3. Deploy
 
 ```bash
-# List all stacks
-cdk list
+# Push to trigger deployment
+git push origin develop  # → staging
+git push origin main     # → production (requires approval)
+```
 
-# Synthesize CloudFormation template
+Or manually trigger via GitHub Actions UI.
+
+## What Gets Deployed
+
+### Infrastructure
+- **DynamoDB**: agents, knowledge-bases, api-keys, sessions, notifications
+- **S3**: knowledge-bases, generated-code, recordings
+- **Lambda**: kb-provisioner, agentcreator-invoker, agentcore-deployer, code-checker
+- **Step Functions**: Agent creation workflow
+- **ECR**: Docker image repositories
+
+### Docker Images
+- **oratio-agentcreator**: Meta-agent for generating agents
+- **oratio-backend**: FastAPI backend services
+
+### Bedrock AgentCore
+- **AgentCreator**: Meta-agent deployed and ready
+
+## Project Structure
+
+```
+infrastructure/
+├── app.py                      # CDK app entry point
+├── cdk_constructs/
+│   ├── compute.py             # Lambda functions
+│   ├── database.py            # DynamoDB tables
+│   └── storage.py             # S3 buckets
+├── GITHUB_ACTIONS_SETUP.md    # Complete OIDC setup guide
+├── DEPLOYMENT_CHECKLIST.md    # Deployment verification
+└── README.md                  # This file
+```
+
+## GitHub Actions Workflow
+
+The workflow (`.github/workflows/deploy-infrastructure.yml`) performs:
+
+1. ✅ Configure AWS credentials via OIDC
+2. ✅ Create ECR repositories
+3. ✅ Build and push Docker images
+4. ✅ CDK bootstrap (if needed)
+5. ✅ CDK diff (preview changes)
+6. ✅ CDK deploy (deploy infrastructure)
+7. ✅ Deploy AgentCreator to Bedrock AgentCore
+8. ✅ Update Lambda environment variables
+9. ✅ Create deployment tag
+
+## Local Development
+
+### Prerequisites
+```bash
+# Install CDK CLI
+npm install -g aws-cdk
+
+# Install Python dependencies
+pip install -r requirements.txt
+```
+
+### Commands
+```bash
+# Synthesize CloudFormation
 cdk synth
 
-# Show differences between deployed and local
+# Preview changes
 cdk diff
 
-# Deploy all stacks
+# Deploy (requires AWS credentials)
 cdk deploy --all
 
-# Deploy specific stack
-cdk deploy OratioAuthStack
-
-# Destroy all stacks
+# Destroy infrastructure
 cdk destroy --all
-
-# Bootstrap (first time only)
-cdk bootstrap aws://ACCOUNT-NUMBER/REGION
 ```
-
-## Stack Organization
-
-### OratioAuthStack
-- Cognito User Pool for authentication
-- User Pool Client for web application
-
-### OratioDatabaseStack
-- DynamoDB tables with GSIs for efficient queries
-- Point-in-time recovery enabled
-- Pay-per-request billing mode
-
-### OratioStorageStack
-- S3 buckets with encryption and versioning
-- Lifecycle policies for cost optimization
-- Tenant-isolated storage structure
-
-### OratioLambdaStack
-- Lambda functions for agent creation workflow
-- IAM roles and policies
-- Environment variables configuration
-
-### OratioWorkflowStack
-- Step Functions state machine
-- Agent creation orchestration
-- Error handling and retries
 
 ## Environment Variables
 
-Set these environment variables before deploying:
+### Lambda: kb-provisioner
+- `AGENTS_TABLE`: DynamoDB agents table
+- `KB_TABLE`: DynamoDB knowledge bases table
+- `KB_BUCKET`: S3 bucket for knowledge base documents
+
+### Lambda: agentcreator-invoker
+- `AGENTS_TABLE`: DynamoDB agents table
+- `KB_TABLE`: DynamoDB knowledge bases table
+- `CODE_BUCKET`: S3 bucket for generated code
+- `AGENTCREATOR_AGENT_ID`: AgentCreator agent ID (set by GitHub Actions)
+- `AGENTCREATOR_AGENT_ALIAS_ID`: AgentCreator alias (production)
+- `AWS_REGION`: AWS region (us-east-1)
+
+### Lambda: agentcore-deployer
+- `AGENTS_TABLE`: DynamoDB agents table
+- `CODE_BUCKET`: S3 bucket for generated code
+- `AWS_REGION`: AWS region (us-east-1)
+
+### Lambda: code-checker
+- `CODE_BUCKET`: S3 bucket for generated code
+
+## Verification
+
+After deployment, verify:
 
 ```bash
-export CDK_DEFAULT_ACCOUNT=your-account-id
-export CDK_DEFAULT_REGION=us-east-1
+# Check Lambda functions
+aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `oratio-`)].FunctionName'
+
+# Check DynamoDB tables
+aws dynamodb list-tables --query 'TableNames[?starts_with(@, `oratio-`)]'
+
+# Check S3 buckets
+aws s3 ls | grep oratio
+
+# Check AgentCreator agent
+aws bedrock-agent list-agents --query 'agentSummaries[?agentName==`oratio-agentcreator`]'
 ```
 
-## Development
+See **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** for complete verification steps.
 
-### Code Quality
+## Troubleshooting
 
-```bash
-# Run linting
-uv run ruff check .
+### Common Issues
 
-# Format code
-uv run ruff format .
+**OIDC authentication failed**
+- Verify OIDC provider exists
+- Check trust policy has correct GitHub repo path
+- Ensure role ARN is correct in GitHub secrets
 
-# Type checking
-uv run mypy .
-```
+**CDK deploy failed**
+- Check IAM permissions
+- Verify CDK bootstrap completed
+- Review CloudFormation events
 
-### Testing
+**AgentCreator deployment failed**
+- Verify AgentCore execution role exists
+- Check Bedrock permissions
+- Ensure Docker image pushed successfully
 
-```bash
-# Synthesize to check for errors
-cdk synth
+See **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** for detailed troubleshooting.
 
-# Validate all stacks
-cdk diff
-```
+## Cost Estimation
 
-## Deployment
+Approximate monthly costs:
+- DynamoDB: $5-20
+- S3: $1-10
+- Lambda: $5-50
+- ECR: $1-5
+- Bedrock AgentCore: $0.10-1.00 per 1000 invocations
+- CloudWatch: $1-10
 
-### First Time Setup
-
-```bash
-# Bootstrap CDK (one-time per account/region)
-cdk bootstrap
-
-# Deploy all stacks
-cdk deploy --all
-```
-
-### Updates
-
-```bash
-# Check what will change
-cdk diff
-
-# Deploy changes
-cdk deploy --all
-```
-
-## Stack Dependencies
-
-```
-OratioAuthStack (independent)
-OratioDatabaseStack (independent)
-OratioStorageStack (independent)
-OratioLambdaStack (depends on Database + Storage)
-OratioWorkflowStack (depends on Lambda)
-```
-
-## Resources Created
-
-- 5 DynamoDB tables with GSIs
-- 3 S3 buckets with lifecycle policies
-- 1 Cognito User Pool with client
-- 3 Lambda functions
-- 1 Step Functions state machine
-- IAM roles and policies
-
-## Cost Optimization
-
-- DynamoDB: Pay-per-request billing
-- S3: Lifecycle transitions to IA and Glacier
-- Lambda: Right-sized memory allocation
-- Cognito: Free tier for up to 50,000 MAUs
+**Total**: ~$15-100/month depending on usage
 
 ## Security
 
-- All S3 buckets block public access
-- Encryption at rest enabled
-- IAM least privilege policies
-- Cognito password policies enforced
-- Point-in-time recovery for DynamoDB
+- ✅ OIDC authentication (no long-lived credentials)
+- ✅ Least privilege IAM roles
+- ✅ Environment protection rules
+- ✅ Encrypted S3 buckets
+- ✅ VPC isolation (optional)
+
+## Documentation
+
+- **[GITHUB_ACTIONS_SETUP.md](./GITHUB_ACTIONS_SETUP.md)** - Complete OIDC and IAM setup
+- **[DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)** - Deployment verification and troubleshooting
+- **[../agent-creator/ARCHITECTURE.md](../agent-creator/ARCHITECTURE.md)** - System architecture
+
+## Support
+
+For issues or questions:
+1. Check CloudWatch logs
+2. Review GitHub Actions logs
+3. See troubleshooting guides
+4. Contact team lead
+
+---
+
+**Last Updated**: January 2025

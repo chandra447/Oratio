@@ -122,3 +122,33 @@ class DatabaseConstruct(Construct):
             partition_key=dynamodb.Attribute(name="userId", type=dynamodb.AttributeType.STRING),
             projection_type=dynamodb.ProjectionType.ALL,
         )
+
+        # Voice Sessions table (for Nova Sonic conversation logging)
+        self.voice_sessions_table = dynamodb.Table(
+            self,
+            "VoiceSessionsTable",
+            table_name="oratio-voice-sessions",
+            partition_key=dynamodb.Attribute(name="sessionId", type=dynamodb.AttributeType.STRING),
+            sort_key=dynamodb.Attribute(name="userId", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.RETAIN,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+        )
+
+        # Add GSI for querying voice sessions by userId
+        self.voice_sessions_table.add_global_secondary_index(
+            index_name="userId-createdAt-index",
+            partition_key=dynamodb.Attribute(name="userId", type=dynamodb.AttributeType.STRING),
+            sort_key=dynamodb.Attribute(name="createdAt", type=dynamodb.AttributeType.NUMBER),
+            projection_type=dynamodb.ProjectionType.ALL,
+        )
+
+        # Add GSI for querying voice sessions by agentId
+        self.voice_sessions_table.add_global_secondary_index(
+            index_name="agentId-createdAt-index",
+            partition_key=dynamodb.Attribute(name="agentId", type=dynamodb.AttributeType.STRING),
+            sort_key=dynamodb.Attribute(name="createdAt", type=dynamodb.AttributeType.NUMBER),
+            projection_type=dynamodb.ProjectionType.ALL,
+        )

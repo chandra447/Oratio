@@ -13,6 +13,7 @@ class ComputeConstruct(Construct):
         knowledge_bases_table: dynamodb.Table,
         kb_bucket: s3.Bucket,
         code_bucket: s3.Bucket,
+        agentcreator_runtime_arn: str = "",
         **kwargs,
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -22,7 +23,7 @@ class ComputeConstruct(Construct):
             self,
             "KBProvisioner",
             function_name="oratio-kb-provisioner",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="handler.lambda_handler",
             code=lambda_.Code.from_asset("../lambdas/kb_provisioner"),
             timeout=Duration.minutes(5),
@@ -51,12 +52,24 @@ class ComputeConstruct(Construct):
             )
         )
 
+        # Get Chameleon Runtime ARN from Parameter Store (set by deploy-chameleon.yml)
+        try:
+            from aws_cdk import aws_ssm as ssm
+            chameleon_runtime_arn = ssm.StringParameter.value_from_lookup(
+                self,
+                "/oratio/chameleon/runtime-arn"
+            )
+        except Exception:
+            # Fallback if parameter doesn't exist yet
+            import os
+            chameleon_runtime_arn = os.environ.get("SHARED_AGENTCORE_RUNTIME_ARN", "")
+
         # AgentCreator Invoker Lambda
         self.agentcreator_invoker = lambda_.Function(
             self,
             "AgentCreatorInvoker",
             function_name="oratio-agentcreator-invoker",
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_12,
             handler="handler.lambda_handler",
             code=lambda_.Code.from_asset("../lambdas/agentcreator_invoker"),
             timeout=Duration.minutes(15),
@@ -65,8 +78,8 @@ class ComputeConstruct(Construct):
                 "AGENTS_TABLE": agents_table.table_name,
                 "KB_TABLE": knowledge_bases_table.table_name,
                 "CODE_BUCKET": code_bucket.bucket_name,
-                "AGENTCREATOR_AGENT_ID": "",  # To be configured after AgentCreator is deployed
-                "AGENTCREATOR_AGENT_ALIAS_ID": "TSTALIASID",
+                "AGENTCREATOR_RUNTIME_ARN": agentcreator_runtime_arn,
+                "SHARED_AGENTCORE_RUNTIME_ARN": chameleon_runtime_arn,
             },
         )
 
@@ -75,69 +88,19 @@ class ComputeConstruct(Construct):
         knowledge_bases_table.grant_read_data(self.agentcreator_invoker)
         code_bucket.grant_write(self.agentcreator_invoker)
 
-        # Grant Bedrock Agent Runtime permissions to invoke AgentCreator
+        # Grant Bedrock AgentCore Runtime permissions to invoke AgentCreator
         self.agentcreator_invoker.add_to_role_policy(
             iam.PolicyStatement(
                 actions=[
-                    "bedrock:InvokeAgent",
+                    "bedrock-agentcore:InvokeAgentRuntime",
                     "bedrock:InvokeModel",
                 ],
                 resources=["*"],
             )
         )
 
-        # AgentCore Deployer Lambda
-        self.agentcore_deployer = lambda_.Function(
-            self,
-            "AgentCoreDeployer",
-            function_name="oratio-agentcore-deployer",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="handler.lambda_handler",
-            code=lambda_.Code.from_asset("../lambdas/agentcore_deployer"),
-            timeout=Duration.minutes(10),
-            memory_size=1024,
-            environment={
-                "AGENTS_TABLE": agents_table.table_name,
-                "CODE_BUCKET": code_bucket.bucket_name,
-            },
-        )
-
-        # Grant permissions
-        agents_table.grant_read_write_data(self.agentcore_deployer)
-        code_bucket.grant_read(self.agentcore_deployer)
-
-        # Grant AgentCore deployment permissions
-        self.agentcore_deployer.add_to_role_policy(
-            iam.PolicyStatement(
-                actions=[
-                    "bedrock:CreateAgent",
-                    "bedrock:UpdateAgent",
-                    "bedrock:CreateAgentAlias",
-                    "bedrock:PrepareAgent",
-                    "bedrock:GetAgent",
-                    "bedrock:AssociateAgentKnowledgeBase",
-                ],
-                resources=["*"],
-            )
-        )
-
-        # Code Checker Lambda
-        self.code_checker = lambda_.Function(
-            self,
-            "CodeChecker",
-            function_name="oratio-code-checker",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="handler.lambda_handler",
-            code=lambda_.Code.from_asset("../lambdas/code_checker"),
-            timeout=Duration.seconds(30),
-            memory_size=256,
-            environment={
-                "CODE_BUCKET": code_bucket.bucket_name,
-            },
-        )
-
-        # Grant permissions
-        code_bucket.grant_read(self.code_checker)
+        # Note: Removed agentcore_deployer and code_checker Lambdas
+        # agentcreator_invoker now marks agents as active directly (simpler workflow)
 
         # Add additional Bedrock permissions for KB Provisioner
         self.kb_provisioner.add_to_role_policy(
@@ -155,5 +118,20 @@ class ComputeConstruct(Construct):
             iam.PolicyStatement(
                 actions=["s3:PutObjectTagging"],
                 resources=[f"{code_bucket.bucket_arn}/*"],
+            )
+        )
+        
+        # Grant SSM Parameter Store read access (for AgentCreator Runtime ARN)
+        self.agentcreator_invoker.add_to_role_policy(
+            iam.PolicyStatement(
+                sid="SSMParameterAccess",
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                ],
+                resources=[
+                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/oratio/*",
+                ],
             )
         )

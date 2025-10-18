@@ -81,13 +81,20 @@ class Agent(BaseModel):
     bedrock_knowledge_base_arn: Optional[str] = Field(
         None, description="Bedrock Knowledge Base ARN"
     )
-    agentcore_agent_id: Optional[str] = Field(None, description="AgentCore agent ID")
-    agentcore_agent_arn: Optional[str] = Field(None, description="AgentCore agent ARN")
+    agentcore_runtime_arn: Optional[str] = Field(
+        None, description="Bedrock AgentCore Runtime ARN (shared Chameleon loader)"
+    )
     generated_prompt: Optional[str] = Field(
-        None, description="Generated prompt from AgentCreator for voice agents"
+        None, description="Generated system prompt for the Strands agent (embedded in code)"
+    )
+    voice_prompt: Optional[str] = Field(
+        None, description="Voice-optimized system prompt for Nova Sonic interface"
     )
     agent_code_s3_path: Optional[str] = Field(
         None, description="S3 path to generated agent_file.py"
+    )
+    memory_id: Optional[str] = Field(
+        None, description="AgentCore Memory resource ID for conversation history"
     )
     status: AgentStatus = Field(
         default=AgentStatus.CREATING, description="Current status of the agent"
@@ -100,8 +107,7 @@ class Agent(BaseModel):
         default_factory=lambda: int(datetime.now().timestamp()),
         description="Last update timestamp",
     )
-    websocket_url: Optional[str] = Field(None, description="WebSocket URL for voice agent")
-    api_endpoint: Optional[str] = Field(None, description="REST API endpoint for text agent")
+    # Note: websocket_url and api_endpoint removed - constructed on-the-fly in API
 
     class Config:
         use_enum_values = True
@@ -127,13 +133,12 @@ class AgentUpdate(BaseModel):
     """Request model for updating an agent"""
 
     bedrock_knowledge_base_arn: Optional[str] = None
-    agentcore_agent_id: Optional[str] = None
-    agentcore_agent_arn: Optional[str] = None
+    agentcore_runtime_arn: Optional[str] = None
     generated_prompt: Optional[str] = None
+    voice_prompt: Optional[str] = None
     agent_code_s3_path: Optional[str] = None
+    memory_id: Optional[str] = None
     status: Optional[AgentStatus] = None
-    websocket_url: Optional[str] = None
-    api_endpoint: Optional[str] = None
     updated_at: int = Field(default_factory=lambda: int(datetime.now().timestamp()))
 
     class Config:
@@ -155,16 +160,16 @@ class AgentResponse(BaseModel):
     voice_config: Optional[Dict]
     text_config: Optional[Dict]
     bedrock_knowledge_base_arn: Optional[str]
-    agentcore_agent_id: Optional[str]
-    agentcore_agent_arn: Optional[str]
+    agentcore_runtime_arn: Optional[str]
     generated_prompt: Optional[str]
+    voice_prompt: Optional[str]
     agent_code_s3_path: Optional[str]
+    memory_id: Optional[str]
     status: AgentStatus
     created_at: int
     updated_at: int
-    websocket_url: Optional[str]
-    api_endpoint: Optional[str]
     knowledge_base: Optional[Dict] = None  # Will be populated with KB details
+    # Note: websocket_url and api_endpoint constructed on-the-fly when needed
 
     class Config:
         use_enum_values = True
