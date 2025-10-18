@@ -14,9 +14,6 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml ./
-
 # Install Python dependencies using uv
 # Install core Strands SDK
 RUN uv pip install --system \
@@ -64,5 +61,5 @@ ENV LOG_LEVEL=INFO
 # These are set in the AgentCore execution role, not in the container
 
 # Run with OpenTelemetry instrumentation
-CMD ["opentelemetry-instrument", "python", "generic_loader.py"]
+CMD ["uv", "run", "opentelemetry-instrument", "python", "generic_loader.py"]
 
