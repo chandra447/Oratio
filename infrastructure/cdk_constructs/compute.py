@@ -1,4 +1,4 @@
-from aws_cdk import Duration, aws_lambda as lambda_, aws_iam as iam, aws_dynamodb as dynamodb, aws_s3 as s3
+from aws_cdk import Duration, Stack, aws_lambda as lambda_, aws_iam as iam, aws_dynamodb as dynamodb, aws_s3 as s3
 from constructs import Construct
 
 
@@ -122,6 +122,9 @@ class ComputeConstruct(Construct):
         )
         
         # Grant SSM Parameter Store read access (for AgentCreator Runtime ARN)
+        # Get stack context for region and account
+        stack = Stack.of(self)
+        
         self.agentcreator_invoker.add_to_role_policy(
             iam.PolicyStatement(
                 sid="SSMParameterAccess",
@@ -131,7 +134,7 @@ class ComputeConstruct(Construct):
                     "ssm:GetParameters",
                 ],
                 resources=[
-                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/oratio/*",
+                    f"arn:aws:ssm:{stack.region}:{stack.account}:parameter/oratio/*",
                 ],
             )
         )
