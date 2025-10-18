@@ -119,8 +119,9 @@ def create_vector_bucket_and_index(kb_id: str, user_id: str) -> tuple:
         index_response = s3vectors.create_index(
             vectorBucketName=vector_bucket_name,
             indexName=index_name,
-            vectorDimension=1024,  # Titan Embed Text v2 dimension
-            distanceMetric="COSINE",
+            dataType="float32",  # Data type for vector embeddings
+            dimension=1024,  # Titan Embed Text v2 dimension
+            distanceMetric="cosine",
         )
         
         index_arn = index_response["indexArn"]
