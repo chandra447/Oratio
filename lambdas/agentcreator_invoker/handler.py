@@ -29,7 +29,7 @@ except ImportError:
 # Environment variables
 AGENTS_TABLE = os.environ.get("AGENTS_TABLE", "oratio-agents")
 CODE_BUCKET = os.environ.get("CODE_BUCKET", "oratio-generated-code")
-SHARED_AGENTCORE_RUNTIME_ARN = os.environ.get("SHARED_AGENTCORE_RUNTIME_ARN")
+CHAMELEON_RUNTIME_ARN_SSM_PATH = os.environ.get("CHAMELEON_RUNTIME_ARN_SSM_PATH", "/oratio/chameleon/runtime-arn")
 
 
 def get_agentcreator_runtime_arn():
@@ -49,6 +49,21 @@ def get_agentcreator_runtime_arn():
         if fallback_arn:
             logger.warning(f"Using fallback ARN from environment variable: {fallback_arn}")
         return fallback_arn
+
+
+def get_chameleon_runtime_arn():
+    """Fetch Chameleon Runtime ARN from Parameter Store"""
+    try:
+        response = ssm_client.get_parameter(
+            Name=CHAMELEON_RUNTIME_ARN_SSM_PATH,
+            WithDecryption=False
+        )
+        arn = response['Parameter']['Value']
+        logger.info(f"Retrieved Chameleon Runtime ARN from Parameter Store: {arn}")
+        return arn
+    except Exception as e:
+        logger.error(f"Failed to get Chameleon Runtime ARN from Parameter Store: {e}")
+        raise ValueError(f"Chameleon Runtime ARN not found in Parameter Store at {CHAMELEON_RUNTIME_ARN_SSM_PATH}")
 
 
 def lambda_handler(event, context):
@@ -194,9 +209,8 @@ def lambda_handler(event, context):
         else:
             logger.info("Memory creation skipped (not enabled or client not available)")
 
-        # Validate Chameleon runtime ARN is configured
-        if not SHARED_AGENTCORE_RUNTIME_ARN:
-            raise ValueError("SHARED_AGENTCORE_RUNTIME_ARN not configured")
+        # Get Chameleon runtime ARN from Parameter Store
+        chameleon_runtime_arn = get_chameleon_runtime_arn()
         
         # Update agent in DynamoDB with code path, prompts, memory ID, and mark as active
         # Note: URLs (websocket/API endpoints) are constructed on-the-fly in FastAPI
@@ -204,7 +218,7 @@ def lambda_handler(event, context):
         expression_values = {
             ":path": code_s3_path,
             ":prompt": generated_prompt_text,  # Agent system prompt (full_prompt)
-            ":arn": SHARED_AGENTCORE_RUNTIME_ARN,
+            ":arn": chameleon_runtime_arn,
             ":status": "active",
             ":updated": int(time.time()),
         }

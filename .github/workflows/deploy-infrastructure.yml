@@ -242,6 +242,7 @@ jobs:
             --overwrite \
             --region ${{ env.AWS_REGION }}
           echo "✓ Chameleon ARN stored: /oratio/chameleon/runtime-arn"
+          echo "✓ Lambda will read ARN from SSM Parameter Store automatically"
       
       # Step 13: Create deployment tag
       - name: Create deployment tag

@@ -52,18 +52,6 @@ class ComputeConstruct(Construct):
             )
         )
 
-        # Get Chameleon Runtime ARN from Parameter Store (set by deploy-chameleon.yml)
-        try:
-            from aws_cdk import aws_ssm as ssm
-            chameleon_runtime_arn = ssm.StringParameter.value_from_lookup(
-                self,
-                "/oratio/chameleon/runtime-arn"
-            )
-        except Exception:
-            # Fallback if parameter doesn't exist yet
-            import os
-            chameleon_runtime_arn = os.environ.get("SHARED_AGENTCORE_RUNTIME_ARN", "")
-
         # AgentCreator Invoker Lambda
         self.agentcreator_invoker = lambda_.Function(
             self,
@@ -78,8 +66,7 @@ class ComputeConstruct(Construct):
                 "AGENTS_TABLE": agents_table.table_name,
                 "KB_TABLE": knowledge_bases_table.table_name,
                 "CODE_BUCKET": code_bucket.bucket_name,
-                "AGENTCREATOR_RUNTIME_ARN": agentcreator_runtime_arn,
-                "SHARED_AGENTCORE_RUNTIME_ARN": chameleon_runtime_arn,
+                "CHAMELEON_RUNTIME_ARN_SSM_PATH": "/oratio/chameleon/runtime-arn",
             },
         )
 
