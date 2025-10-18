@@ -7,7 +7,7 @@ Provides documentation access via MCP servers:
 
 Based on: https://dspy.ai/tutorials/mcp/
 
-Note: MCP sessions must be kept alive to be used as tools.
+Note: MCP sessions must be kept alive to be used as tools. for dspy react
 """
 
 import asyncio
