@@ -1,0 +1,280 @@
+name: Deploy Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/**'
+      - 'lambdas/**'
+      - 'agent-creator/**'
+      - '.github/workflows/deploy-infrastructure.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  AWS_REGION: us-east-1
+  ECR_AGENTCREATOR_REPO: oratio-agentcreator
+  ECR_BACKEND_REPO: oratio-backend
+  ECR_CHAMELEON_REPO: oratio-chameleon
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+    
+    permissions:
+      id-token: write   # Required for OIDC
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: GitHubActions-${{ github.run_id }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "infrastructure/pyproject.toml"
+      
+      - name: Set up Node.js (for CDK CLI)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install CDK CLI
+        run: npm install -g aws-cdk
+      
+      - name: Install Python dependencies with uv
+        working-directory: infrastructure
+        run: |
+          uv sync --frozen
+          echo "✓ Infrastructure dependencies installed"
+      
+      # Step 1: Set up Docker Buildx for ARM64 builds
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      # Step 2: Login to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      # Step 3: Create ECR repositories if they don't exist
+      - name: Create ECR repositories
+        run: |
+          .github/scripts/create-ecr-repo.sh ${{ env.ECR_AGENTCREATOR_REPO }} ${{ env.AWS_REGION }}
+          .github/scripts/create-ecr-repo.sh ${{ env.ECR_BACKEND_REPO }} ${{ env.AWS_REGION }}
+          .github/scripts/create-ecr-repo.sh ${{ env.ECR_CHAMELEON_REPO }} ${{ env.AWS_REGION }}
+          echo "✓ ECR repositories ready"
+      
+      # Step 4: Build and push AgentCreator Docker image (ARM64)
+      - name: Build and push AgentCreator image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./agent-creator
+          file: ./agent-creator/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_AGENTCREATOR_REPO }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_AGENTCREATOR_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Set AgentCreator image URI
+        run: |
+          echo "AGENTCREATOR_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_AGENTCREATOR_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
+          echo "✓ AgentCreator image pushed: ${{ github.sha }}"
+      
+      # Step 5: Build and push Backend Docker image (ARM64)
+      - name: Build and push Backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.dev
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPO }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Set Backend image URI
+        run: |
+          echo "BACKEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
+          echo "✓ Backend image pushed: ${{ github.sha }}"
+      
+      # Step 6: Build and push Chameleon Docker image (ARM64)
+      - name: Build and push Chameleon image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./agent-creator
+          file: ./agent-creator/Dockerfile.chameleon
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Set Chameleon image URI
+        run: |
+          echo "CHAMELEON_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
+          echo "✓ Chameleon image pushed: ${{ github.sha }}"
+      
+      # Step 7: CDK Bootstrap (if needed)
+      - name: CDK Bootstrap
+        working-directory: infrastructure
+        run: |
+          uv run cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ env.AWS_REGION }} || true
+      
+      # Step 7: CDK Deploy (creates IAM roles for AgentCore)
+      - name: CDK Deploy
+        working-directory: infrastructure
+        run: |
+          uv run cdk deploy --all --require-approval never
+        env:
+          CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
+          CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+      
+      # Step 8: Export IAM Role ARNs from CloudFormation
+      - name: Export IAM Role ARNs
+        id: export_roles
+        run: |
+          AGENTCREATOR_ROLE_ARN=$(aws cloudformation describe-stacks \
+            --region ${{ env.AWS_REGION }} \
+            --stack-name OratioStack \
+            --query "Stacks[0].Outputs[?OutputKey=='AgentCreatorExecutionRoleArn'].OutputValue" \
+            --output text)
+          
+          CHAMELEON_ROLE_ARN=$(aws cloudformation describe-stacks \
+            --region ${{ env.AWS_REGION }} \
+            --stack-name OratioStack \
+            --query "Stacks[0].Outputs[?OutputKey=='ChameleonExecutionRoleArn'].OutputValue" \
+            --output text)
+          
+          echo "agentcreator_role_arn=$AGENTCREATOR_ROLE_ARN" >> $GITHUB_OUTPUT
+          echo "chameleon_role_arn=$CHAMELEON_ROLE_ARN" >> $GITHUB_OUTPUT
+          
+          echo "✅ Exported IAM Role ARNs:"
+          echo "  AgentCreator: $AGENTCREATOR_ROLE_ARN"
+          echo "  Chameleon: $CHAMELEON_ROLE_ARN"
+      
+      # Step 9: Deploy AgentCreator to Bedrock AgentCore Runtime (AFTER CDK)
+      - name: Deploy AgentCreator to AgentCore
+        working-directory: infrastructure
+        run: |
+          OUTPUT=$(uv run python scripts/deploy_agentcore.py \
+            --name oratio-agentcreator \
+            --image "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_AGENTCREATOR_REPO }}:${{ github.sha }}" \
+            --role-arn "${{ steps.export_roles.outputs.agentcreator_role_arn }}" \
+            --description "Meta-agent that generates Strands agents from SOPs" \
+            --region ${{ env.AWS_REGION }})
+          
+          RUNTIME_ARN=$(echo "$OUTPUT" | grep "RUNTIME_ARN=" | cut -d'=' -f2)
+          echo "AGENTCREATOR_RUNTIME_ARN=$RUNTIME_ARN" >> $GITHUB_ENV
+          echo "✓ AgentCreator deployed: $RUNTIME_ARN"
+      
+      # Step 10: Store AgentCreator Runtime ARN in Parameter Store
+      - name: Store AgentCreator Runtime ARN in Parameter Store
+        run: |
+          aws ssm put-parameter \
+            --name "/oratio/agentcreator/runtime-arn" \
+            --value "${{ env.AGENTCREATOR_RUNTIME_ARN }}" \
+            --type "String" \
+            --overwrite \
+            --region ${{ env.AWS_REGION }}
+          echo "✓ Runtime ARN stored: /oratio/agentcreator/runtime-arn"
+      
+      # Step 11: Deploy Chameleon to Bedrock AgentCore Runtime
+      - name: Deploy Chameleon to AgentCore
+        working-directory: infrastructure
+        env:
+          CODE_BUCKET: ${{ secrets.CODE_BUCKET_NAME || 'oratio-generated-code' }}
+          AGENTS_TABLE: ${{ secrets.AGENTS_TABLE_NAME || 'oratio-agents' }}
+        run: |
+          OUTPUT=$(uv run python scripts/deploy_agentcore.py \
+            --name oratio-chameleon \
+            --image "${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:${{ github.sha }}" \
+            --role-arn "${{ steps.export_roles.outputs.chameleon_role_arn }}" \
+            --description "Generic loader that dynamically loads agent code from S3" \
+            --env "CODE_BUCKET=${CODE_BUCKET}" \
+            --env "AGENTS_TABLE=${AGENTS_TABLE}" \
+            --env "AWS_REGION=${{ env.AWS_REGION }}" \
+            --region ${{ env.AWS_REGION }})
+          
+          RUNTIME_ARN=$(echo "$OUTPUT" | grep "RUNTIME_ARN=" | cut -d'=' -f2)
+          echo "CHAMELEON_RUNTIME_ARN=$RUNTIME_ARN" >> $GITHUB_ENV
+          echo "✓ Chameleon deployed: $RUNTIME_ARN"
+      
+      # Step 12: Store Chameleon Runtime ARN in Parameter Store
+      - name: Store Chameleon Runtime ARN in Parameter Store
+        run: |
+          aws ssm put-parameter \
+            --name "/oratio/chameleon/runtime-arn" \
+            --value "${{ env.CHAMELEON_RUNTIME_ARN }}" \
+            --type "String" \
+            --overwrite \
+            --region ${{ env.AWS_REGION }}
+          echo "✓ Chameleon ARN stored: /oratio/chameleon/runtime-arn"
+      
+      # Step 13: Create deployment tag
+      - name: Create deployment tag
+        if: success()
+        run: |
+          git tag -a "deploy-$(date +%Y%m%d-%H%M%S)" -m "Deployment to ${{ github.event.inputs.environment || 'staging' }}"
+          git push origin --tags || true
+      
+      # Step 14: Notify success
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "## ✅ Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Docker Images" >> $GITHUB_STEP_SUMMARY
+          echo "- AgentCreator: \`${{ env.AGENTCREATOR_IMAGE_URI }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend: \`${{ env.BACKEND_IMAGE_URI }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Chameleon: \`${{ env.CHAMELEON_IMAGE_URI }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### AgentCore Runtimes" >> $GITHUB_STEP_SUMMARY
+          echo "- AgentCreator: \`${{ env.AGENTCREATOR_RUNTIME_ARN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Chameleon: \`${{ env.CHAMELEON_RUNTIME_ARN }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### IAM Execution Roles" >> $GITHUB_STEP_SUMMARY
+          echo "- AgentCreator: \`${{ steps.export_roles.outputs.agentcreator_role_arn }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Chameleon: \`${{ steps.export_roles.outputs.chameleon_role_arn }}\`" >> $GITHUB_STEP_SUMMARY
+      
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "## ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the logs above for details." >> $GITHUB_STEP_SUMMARY
