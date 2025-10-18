@@ -41,16 +41,19 @@ class ComputeConstruct(Construct):
         kb_bucket.grant_read(self.kb_provisioner)
 
         # --- START: CORRECTED PERMISSIONS FOR KB PROVISIONER ---
-        # Policy for direct Bedrock and IAM actions that the Lambda needs to call
+        # Policy for direct Bedrock, IAM, and S3 Vectors actions that the Lambda needs to call
         # NOTE: The condition must NOT be applied to these actions, or they will fail
         self.kb_provisioner.add_to_role_policy(
             iam.PolicyStatement(
                 sid="BedrockAndIamActions",
                 effect=iam.Effect.ALLOW,
                 actions=[
-                    "bedrock:*",          # Allows creating, managing KBs
-                    "iam:CreateRole",     # Allows creating the service role for Bedrock
-                    "iam:AttachRolePolicy" # Allows attaching policies to that role
+                    "bedrock:*",           # Allows creating, managing KBs
+                    "iam:CreateRole",      # Allows creating the service role for Bedrock
+                    "iam:AttachRolePolicy", # Allows attaching policies to that role
+                    "iam:PutRolePolicy",   # Allows adding inline policies to roles
+                    "iam:GetRole",         # Allows retrieving role details
+                    "s3vectors:*",         # Allows creating and managing S3 vector buckets and indexes
                 ],
                 resources=["*"], # Scope down in production if possible
             )

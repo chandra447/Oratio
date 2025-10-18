@@ -12,6 +12,8 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 dynamodb = boto3.resource("dynamodb")
 bedrock_agent = boto3.client("bedrock-agent")
+s3vectors = boto3.client("s3vectors")
+iam = boto3.client("iam")
 
 # Environment variables
 AGENTS_TABLE = os.environ.get("AGENTS_TABLE", "oratio-agents")
@@ -20,6 +22,120 @@ KB_BUCKET = os.environ.get("KB_BUCKET", "oratio-knowledge-bases")
 KB_ROLE_ARN = os.environ.get(
     "KB_ROLE_ARN", "arn:aws:iam::123456789012:role/BedrockKnowledgeBaseRole"
 )
+
+
+def create_kb_service_role(kb_id: str, vector_bucket_name: str, account_id: str) -> str:
+    """
+    Create an IAM role for Bedrock Knowledge Base to access S3 Vectors
+    """
+    role_name = f"oratio-kb-role-{kb_id}"
+    
+    # Trust policy for Bedrock
+    trust_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {"Service": "bedrock.amazonaws.com"},
+                "Action": "sts:AssumeRole",
+            }
+        ],
+    }
+    
+    try:
+        # Create the role
+        response = iam.create_role(
+            RoleName=role_name,
+            AssumeRolePolicyDocument=json.dumps(trust_policy),
+            Description=f"Service role for Bedrock Knowledge Base {kb_id}",
+        )
+        role_arn = response["Role"]["Arn"]
+        logger.info(f"Created IAM role: {role_arn}")
+        
+        # Create inline policy for S3 Vectors access
+        policy_document = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3vectors:GetVectors",
+                        "s3vectors:PutVectors",
+                        "s3vectors:DeleteVectors",
+                        "s3vectors:QueryVectors",
+                        "s3vectors:ListVectors",
+                        "s3vectors:GetIndex",
+                        "s3vectors:ListIndexes",
+                    ],
+                    "Resource": [
+                        f"arn:aws:s3vectors:*:{account_id}:bucket/{vector_bucket_name}",
+                        f"arn:aws:s3vectors:*:{account_id}:bucket/{vector_bucket_name}/*",
+                    ],
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": ["bedrock:InvokeModel"],
+                    "Resource": "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
+                },
+            ],
+        }
+        
+        iam.put_role_policy(
+            RoleName=role_name,
+            PolicyName="BedrockKBAccessPolicy",
+            PolicyDocument=json.dumps(policy_document),
+        )
+        logger.info(f"Attached policy to role {role_name}")
+        
+        # Wait a bit for IAM eventual consistency
+        time.sleep(10)
+        
+        return role_arn
+        
+    except iam.exceptions.EntityAlreadyExistsException:
+        logger.info(f"Role {role_name} already exists, retrieving ARN")
+        response = iam.get_role(RoleName=role_name)
+        return response["Role"]["Arn"]
+
+
+def create_vector_bucket_and_index(kb_id: str, user_id: str) -> tuple:
+    """
+    Create S3 Vector bucket and index for the knowledge base
+    Returns: (vector_bucket_name, index_arn, index_name)
+    """
+    vector_bucket_name = f"oratio-kb-vectors-{kb_id}"
+    index_name = f"oratio-kb-index-{kb_id}"
+    
+    try:
+        # Create S3 Vector bucket
+        logger.info(f"Creating S3 Vector bucket: {vector_bucket_name}")
+        bucket_response = s3vectors.create_vector_bucket(
+            vectorBucketName=vector_bucket_name,
+            tags=[
+                {"key": "userId", "value": user_id},
+                {"key": "platform", "value": "oratio"},
+                {"key": "environment", "value": "production"},
+            ],
+        )
+        logger.info(f"Created S3 Vector bucket: {vector_bucket_name}")
+        
+        # Create vector index with Titan Embed v2 dimensions (1024) and cosine distance
+        logger.info(f"Creating vector index: {index_name}")
+        index_response = s3vectors.create_index(
+            vectorBucketName=vector_bucket_name,
+            indexName=index_name,
+            vectorDimension=1024,  # Titan Embed Text v2 dimension
+            distanceMetric="COSINE",
+        )
+        
+        index_arn = index_response["indexArn"]
+        logger.info(f"Created vector index: {index_arn}")
+        
+        return vector_bucket_name, index_arn, index_name
+        
+    except Exception as e:
+        logger.error(f"Error creating vector bucket/index: {e}")
+        raise
 
 
 def lambda_handler(event, context):
@@ -40,6 +156,9 @@ def lambda_handler(event, context):
             raise ValueError("Missing required parameters: userId, agentId, knowledgeBaseId, s3Path")
 
         logger.info(f"Provisioning KB {kb_id} for agent {agent_id}")
+        
+        # Get AWS account ID from context
+        account_id = context.invoked_function_arn.split(":")[4]
 
         # Step 1: Get knowledge base details from DynamoDB
         kb_table = dynamodb.Table(KB_TABLE)
@@ -51,7 +170,15 @@ def lambda_handler(event, context):
         kb_item = kb_response["Item"]
         logger.info(f"Retrieved KB from DynamoDB: {kb_item}")
 
-        # Step 2: Create Bedrock Knowledge Base
+        # Step 2: Create S3 Vector bucket and index
+        vector_bucket_name, index_arn, index_name = create_vector_bucket_and_index(kb_id, user_id)
+        logger.info(f"Created vector bucket: {vector_bucket_name}, index: {index_name}")
+
+        # Step 3: Create IAM role for Bedrock KB to access S3 Vectors
+        kb_role_arn = create_kb_service_role(kb_id, vector_bucket_name, account_id)
+        logger.info(f"Created KB service role: {kb_role_arn}")
+
+        # Step 4: Create Bedrock Knowledge Base with S3 Vectors
         kb_name = f"oratio-kb-{agent_id}"
         kb_description = f"Knowledge base for agent {agent_id}"
 
@@ -60,7 +187,7 @@ def lambda_handler(event, context):
         create_kb_response = bedrock_agent.create_knowledge_base(
             name=kb_name,
             description=kb_description,
-            roleArn=KB_ROLE_ARN,
+            roleArn=kb_role_arn,
             knowledgeBaseConfiguration={
                 "type": "VECTOR",
                 "vectorKnowledgeBaseConfiguration": {
@@ -70,7 +197,9 @@ def lambda_handler(event, context):
             storageConfiguration={
                 "type": "S3_VECTORS",
                 "s3VectorsConfiguration": {
-                    "vectorBucketArn": f"arn:aws:s3:::{KB_BUCKET}",
+                    "vectorBucketArn": f"arn:aws:s3vectors:us-east-1:{account_id}:bucket/{vector_bucket_name}",
+                    "indexArn": index_arn,
+                    "indexName": index_name,
                 },
             },
             tags={"userId": user_id, "platform": "oratio", "environment": "production"},
@@ -149,19 +278,22 @@ def lambda_handler(event, context):
         if elapsed_time >= max_wait_time:
             logger.warning("Ingestion job timeout, but continuing...")
 
-        # Step 6: Update knowledge base in DynamoDB
+        # Step 6: Update knowledge base in DynamoDB with vector bucket and index info
         kb_table.update_item(
             Key={"knowledgeBaseId": kb_id},
-            UpdateExpression="SET bedrockKnowledgeBaseId = :kb_id, #status = :status, updatedAt = :updated",
+            UpdateExpression="SET bedrockKnowledgeBaseId = :kb_id, vectorBucketName = :bucket, indexArn = :index_arn, indexName = :index_name, #status = :status, updatedAt = :updated",
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":kb_id": bedrock_kb_id,
+                ":bucket": vector_bucket_name,
+                ":index_arn": index_arn,
+                ":index_name": index_name,
                 ":status": "ready",
                 ":updated": int(time.time()),
             },
         )
 
-        logger.info(f"Updated KB {kb_id} in DynamoDB with status=ready")
+        logger.info(f"Updated KB {kb_id} in DynamoDB with vector bucket and index info")
 
         # Step 7: Update agent with Bedrock KB ARN
         agents_table = dynamodb.Table(AGENTS_TABLE)
@@ -183,6 +315,9 @@ def lambda_handler(event, context):
             "knowledgeBaseId": kb_id,
             "bedrockKnowledgeBaseId": bedrock_kb_id,
             "bedrockKnowledgeBaseArn": bedrock_kb_arn,
+            "vectorBucketName": vector_bucket_name,
+            "indexArn": index_arn,
+            "indexName": index_name,
             "status": "ready",
             "sop": event.get("sop"),
             "knowledgeBaseDescription": event.get("knowledgeBaseDescription"),
