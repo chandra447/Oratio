@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chameleon"
+version = "1.0.0"
+description = "Generic loader that dynamically loads Strands agents from S3"
+requires-python = ">=3.12"
+
+dependencies = [
+    # Core runtime dependencies
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pydantic>=2.0.0",
+    "httpx>=0.25.0",
+    
+    # AWS dependencies
+    "boto3>=1.39.0",
+    "bedrock-agentcore>=0.1.1",
+    
+    # Strands Agents framework
+    "strands-agents>=0.2.11",
+    "strands-agents-tools>=0.2.11",
+    
+    # Observability
+    "aws-opentelemetry-distro~=0.10.1",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+

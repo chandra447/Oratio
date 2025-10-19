@@ -48,6 +48,7 @@ class AgentCoreRolesConstruct(Construct):
         )
 
         # S3 Access - Read knowledge base files (for S3 vector store)
+        # Includes both the main KB bucket and all dynamically created vector buckets
         self.chameleon_execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="S3AccessForKnowledgeBase",
@@ -60,6 +61,8 @@ class AgentCoreRolesConstruct(Construct):
                 resources=[
                     kb_bucket.bucket_arn,
                     f"{kb_bucket.bucket_arn}/*",
+                    "arn:aws:s3:::oratio-kb-vectors-*",  # All vector buckets
+                    "arn:aws:s3:::oratio-kb-vectors-*/*",  # All objects in vector buckets
                 ],
             )
         )
@@ -90,7 +93,7 @@ class AgentCoreRolesConstruct(Construct):
             )
         )
 
-        # Bedrock Knowledge Base Access
+        # Bedrock Knowledge Base Access - ALL knowledge bases
         self.chameleon_execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="BedrockKnowledgeBaseAccess",
@@ -100,6 +103,24 @@ class AgentCoreRolesConstruct(Construct):
                     "bedrock:RetrieveAndGenerate",
                 ],
                 resources=["arn:aws:bedrock:*:*:knowledge-base/*"],
+            )
+        )
+
+        # S3 Vectors Access - ALL vector buckets and indexes
+        self.chameleon_execution_role.add_to_policy(
+            iam.PolicyStatement(
+                sid="S3VectorsAccess",
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "s3vectors:GetObject",
+                    "s3vectors:ListBucket",
+                    "s3vectors:Query",
+                    "s3vectors:Search",
+                ],
+                resources=[
+                    "arn:aws:s3vectors:*:*:bucket/*",
+                    "arn:aws:s3vectors:*:*:bucket/*/index/*",
+                ],
             )
         )
 

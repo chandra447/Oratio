@@ -56,8 +56,7 @@ jobs:
             backend:
               - 'backend/**'
             chameleon:
-              - 'agent-creator/generic_loader.py'
-              - 'agent-creator/Dockerfile.chameleon'
+              - 'agent-creator/chameleon/**'
             infrastructure:
               - 'infrastructure/**'
               - 'lambdas/**'
@@ -108,7 +107,7 @@ jobs:
         run: |
           .github/scripts/create-ecr-repo.sh ${{ env.ECR_AGENTCREATOR_REPO }} ${{ env.AWS_REGION }}
           .github/scripts/create-ecr-repo.sh ${{ env.ECR_BACKEND_REPO }} ${{ env.AWS_REGION }}
-          .github/scripts/create-ecr-repo.sh ${{ env.ECR_CHAMELEON_REPO }} ${{ env.AWS_REGION }}
+          # Chameleon ECR repo is auto-created by starter toolkit
           echo "✓ ECR repositories ready"
       
       # Step 4: Build and push AgentCreator Docker image (ARM64)
@@ -161,30 +160,8 @@ jobs:
             echo "⏭️  Backend unchanged, using latest image"
           fi
       
-      # Step 6: Build and push Chameleon Docker image (ARM64)
-      - name: Build and push Chameleon image
-        if: steps.changes.outputs.chameleon == 'true' || inputs.force_docker_build
-        uses: docker/build-push-action@v5
-        with:
-          context: ./agent-creator
-          file: ./agent-creator/Dockerfile.chameleon
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      - name: Set Chameleon image URI
-        run: |
-          if [ "${{ steps.changes.outputs.chameleon }}" == "true" ] || [ "${{ inputs.force_docker_build }}" == "true" ]; then
-            echo "CHAMELEON_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
-            echo "✓ Chameleon image pushed: ${{ github.sha }}"
-          else
-            echo "CHAMELEON_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_CHAMELEON_REPO }}:latest" >> $GITHUB_ENV
-            echo "⏭️  Chameleon unchanged, using latest image"
-          fi
+      # Step 6: Chameleon will be deployed using starter toolkit (no Docker build needed)
+      # The toolkit handles Docker build, ECR push, and AgentCore deployment automatically
       
       # Step 7: CDK Bootstrap (if needed)
       - name: CDK Bootstrap
@@ -253,27 +230,30 @@ jobs:
             --region ${{ env.AWS_REGION }}
           echo "✓ Runtime ARN stored: /oratio/agentcreator/runtime-arn"
       
-      # Step 11: Deploy Chameleon to Bedrock AgentCore Runtime
-      - name: Deploy Chameleon to AgentCore
+      # Step 11: Deploy Chameleon using Starter Toolkit
+      # Deploy if: (1) Chameleon files changed, OR (2) force build requested
+      # The toolkit automatically builds Docker image, pushes to ECR, and deploys to AgentCore
+      # Note: The toolkit handles both create and update operations automatically
+      - name: Deploy Chameleon to AgentCore with Starter Toolkit
         if: steps.changes.outputs.chameleon == 'true' || inputs.force_docker_build
-        working-directory: infrastructure
         env:
           CODE_BUCKET: ${{ secrets.CODE_BUCKET_NAME || 'oratio-generated-code' }}
           AGENTS_TABLE: ${{ secrets.AGENTS_TABLE_NAME || 'oratio-agents' }}
         run: |
-          OUTPUT=$(uv run python scripts/deploy_agentcore.py \
+          cd infrastructure
+          OUTPUT=$(uv run python scripts/deploy_agentcore_toolkit.py \
             --name oratio-chameleon \
-            --image "${{ env.CHAMELEON_IMAGE_URI }}" \
+            --entrypoint generic_loader.py \
             --role-arn "${{ steps.export_roles.outputs.chameleon_role_arn }}" \
-            --description "Generic loader that dynamically loads agent code from S3" \
+            --region ${{ env.AWS_REGION }} \
+            --working-dir ../agent-creator/chameleon \
             --env "CODE_BUCKET=${CODE_BUCKET}" \
             --env "AGENTS_TABLE=${AGENTS_TABLE}" \
-            --env "AWS_REGION=${{ env.AWS_REGION }}" \
-            --region ${{ env.AWS_REGION }})
+            --env "AWS_REGION=${{ env.AWS_REGION }}")
           
           RUNTIME_ARN=$(echo "$OUTPUT" | grep "RUNTIME_ARN=" | cut -d'=' -f2)
           echo "CHAMELEON_RUNTIME_ARN=$RUNTIME_ARN" >> $GITHUB_ENV
-          echo "✓ Chameleon deployed: $RUNTIME_ARN"
+          echo "✓ Chameleon deployed with starter toolkit: $RUNTIME_ARN"
       
       # Step 12: Store Chameleon Runtime ARN in Parameter Store
       - name: Store Chameleon Runtime ARN in Parameter Store
