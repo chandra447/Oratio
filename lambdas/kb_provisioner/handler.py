@@ -211,7 +211,7 @@ def lambda_handler(event, context):
                 "s3VectorsConfiguration": {
                     "vectorBucketArn": f"arn:aws:s3vectors:us-east-1:{account_id}:bucket/{vector_bucket_name}",
                     "indexArn": index_arn,
-                    "indexName": index_name,
+                    # Note: indexName should not be provided when indexArn is present
                 },
             },
             tags={"userId": user_id, "platform": "oratio", "environment": "production"},
