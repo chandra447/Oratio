@@ -327,20 +327,20 @@ async def generate_prompt_node(state: AgentCreatorState) -> AgentCreatorState:
     if state.get("voice_personality"):
         voice_personality_str = json.dumps(state["voice_personality"])
 
+    # PromptGenerator.aforward() already extracts and returns the SystemPrompt object
+    # (see modules.py line 308: return result.system_prompt)
+    # So 'result' here IS the SystemPrompt object, not a wrapper
     result = await prompt_generator.acall(
         requirements=state["requirements"],
         plan=state["plan"],
         voice_personality=voice_personality_str,
     )
 
-    # Extract SystemPrompt object
-    system_prompt_obj = getattr(result, "system_prompt", None)
-
-    logger.info("System prompt generated")
+    logger.info(f"System prompt generated - type: {type(result)}")
 
     return {
         **state,
-        "generated_prompt": system_prompt_obj,
+        "generated_prompt": result,  # result is already the SystemPrompt object
         "final_agent_code": state["agent_code"],
     }
 
