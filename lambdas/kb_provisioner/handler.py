@@ -24,9 +24,9 @@ KB_ROLE_ARN = os.environ.get(
 )
 
 
-def create_kb_service_role(kb_id: str, vector_bucket_name: str, account_id: str) -> str:
+def create_kb_service_role(kb_id: str, vector_bucket_name: str, account_id: str, s3_kb_bucket: str) -> str:
     """
-    Create an IAM role for Bedrock Knowledge Base to access S3 Vectors
+    Create an IAM role for Bedrock Knowledge Base to access S3 Vectors and S3 data bucket
     """
     role_name = f"oratio-kb-role-{kb_id}"
     
@@ -52,11 +52,12 @@ def create_kb_service_role(kb_id: str, vector_bucket_name: str, account_id: str)
         role_arn = response["Role"]["Arn"]
         logger.info(f"Created IAM role: {role_arn}")
         
-        # Create inline policy for S3 Vectors access
+        # Create inline policy for S3 Vectors and S3 bucket access
         policy_document = {
             "Version": "2012-10-17",
             "Statement": [
                 {
+                    "Sid": "S3VectorsAccess",
                     "Effect": "Allow",
                     "Action": [
                         "s3vectors:GetVectors",
@@ -73,6 +74,19 @@ def create_kb_service_role(kb_id: str, vector_bucket_name: str, account_id: str)
                     ],
                 },
                 {
+                    "Sid": "S3DataSourceAccess",
+                    "Effect": "Allow",
+                    "Action": [
+                        "s3:GetObject",
+                        "s3:ListBucket",
+                    ],
+                    "Resource": [
+                        f"arn:aws:s3:::{s3_kb_bucket}",
+                        f"arn:aws:s3:::{s3_kb_bucket}/*",
+                    ],
+                },
+                {
+                    "Sid": "BedrockModelAccess",
                     "Effect": "Allow",
                     "Action": ["bedrock:InvokeModel"],
                     "Resource": "arn:aws:bedrock:*::foundation-model/amazon.titan-embed-text-v2:0",
@@ -186,8 +200,8 @@ def lambda_handler(event, context):
         vector_bucket_name, index_arn, index_name = create_vector_bucket_and_index(kb_id, user_id)
         logger.info(f"Created vector bucket: {vector_bucket_name}, index: {index_name}")
 
-        # Step 3: Create IAM role for Bedrock KB to access S3 Vectors
-        kb_role_arn = create_kb_service_role(kb_id, vector_bucket_name, account_id)
+        # Step 3: Create IAM role for Bedrock KB to access S3 Vectors and S3 data bucket
+        kb_role_arn = create_kb_service_role(kb_id, vector_bucket_name, account_id, KB_BUCKET)
         logger.info(f"Created KB service role: {kb_role_arn}")
 
         # Step 4: Create Bedrock Knowledge Base with S3 Vectors
