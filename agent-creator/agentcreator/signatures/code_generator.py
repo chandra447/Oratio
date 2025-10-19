@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 def product_inquiry_agent(query: str) -> str:
     \"\"\"Handle product inquiries.\"\"\"
     agent = Agent(
+        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro
         system_prompt="You are a product expert. Use retrieve tool to answer questions.",
         tools=[retrieve]
     )
@@ -70,6 +71,7 @@ def product_inquiry_agent(query: str) -> str:
 def order_tracking_agent(query: str) -> str:
     \"\"\"Handle order tracking.\"\"\"
     agent = Agent(
+        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro
         system_prompt="You track orders. Use retrieve tool for order info.",
         tools=[retrieve]
     )
@@ -79,6 +81,7 @@ def order_tracking_agent(query: str) -> str:
 def returns_processing_agent(query: str) -> str:
     \"\"\"Handle returns processing.\"\"\"
     agent = Agent(
+        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro
         system_prompt="You process returns. Use retrieve tool for returns info.",
         tools=[retrieve]
     )
@@ -92,6 +95,7 @@ def create_orchestrator(hooks=None, state=None):
         state: Dict with actor_id and session_id (injected by Chameleon)
     \"\"\"
     return Agent(
+        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro instead of default Claude
         system_prompt="Route queries to specialists. Use product_inquiry_agent for products, order_tracking_agent for orders, returns_processing_agent for returns.",
         tools=[product_inquiry_agent, order_tracking_agent, returns_processing_agent, handoff_to_user],
         hooks=hooks or [],
@@ -143,6 +147,7 @@ def create_agent(hooks=None, state=None):
         state: Dict with actor_id and session_id (injected by Chameleon)
     \"\"\"
     return Agent(
+        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro instead of default Claude
         system_prompt="You help customers with inquiries using retrieve and handoff_to_user tools.",
         tools=[retrieve, handoff_to_user],
         hooks=hooks or [],

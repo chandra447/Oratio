@@ -80,7 +80,7 @@ class AgentCoreRolesConstruct(Construct):
             )
         )
 
-        # Bedrock Foundation Model Access
+        # Bedrock Foundation Model Access (includes inference profiles)
         self.chameleon_execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="BedrockFoundationModelAccess",
@@ -89,7 +89,10 @@ class AgentCoreRolesConstruct(Construct):
                     "bedrock:InvokeModel",
                     "bedrock:InvokeModelWithResponseStream",
                 ],
-                resources=["arn:aws:bedrock:*::foundation-model/*"],
+                resources=[
+                    "arn:aws:bedrock:*::foundation-model/*",
+                    "arn:aws:bedrock:*:*:inference-profile/*",  # For cross-region inference
+                ],
             )
         )
 
@@ -194,7 +197,7 @@ class AgentCoreRolesConstruct(Construct):
             description="Execution role for AgentCreator meta-agent AgentCore runtime",
         )
 
-        # Bedrock Foundation Model Access for AgentCreator
+        # Bedrock Foundation Model Access for AgentCreator (includes inference profiles)
         self.agentcreator_execution_role.add_to_policy(
             iam.PolicyStatement(
                 sid="BedrockFoundationModelAccess",
@@ -203,7 +206,10 @@ class AgentCoreRolesConstruct(Construct):
                     "bedrock:InvokeModel",
                     "bedrock:InvokeModelWithResponseStream",
                 ],
-                resources=["arn:aws:bedrock:*::foundation-model/*"],
+                resources=[
+                    "arn:aws:bedrock:*::foundation-model/*",
+                    "arn:aws:bedrock:*:*:inference-profile/*",  # For cross-region inference
+                ],
             )
         )
 
