@@ -113,9 +113,11 @@ def invoke(payload, context, hooks=None, state=None):
         # Create agent with injected hooks and state
         agent = create_orchestrator(hooks=hooks, state=state)
         
-        # Handle different payload formats
+        # Extract user message from payload
         user_message = payload.get('prompt', payload.get('input', ''))
-        response = agent({'message': user_message})
+        
+        # Invoke agent with string prompt (Strands expects str, not dict)
+        response = agent(user_message)
         return {'output': str(response)}
     except Exception as e:
         logger.error(f'Error occurred: {e}')
@@ -162,8 +164,11 @@ def invoke(payload, context, hooks=None, state=None):
         # Create agent with injected hooks and state
         agent = create_agent(hooks=hooks, state=state)
         
+        # Extract user message from payload
         user_message = payload.get('prompt', payload.get('input', ''))
-        response = agent({'message': user_message})
+        
+        # Invoke agent with string prompt (Strands expects str, not dict)
+        response = agent(user_message)
         return {'output': str(response)}
     except Exception as e:
         logger.error(f'Error occurred: {e}')
