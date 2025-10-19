@@ -14,7 +14,7 @@ from typing import Dict, Any
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from bedrock_agentcore.memory import MemoryClient
 from strands.hooks import AgentInitializedEvent, HookProvider, HookRegistry, MessageAddedEvent
-
+#comment to trigger a build
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
