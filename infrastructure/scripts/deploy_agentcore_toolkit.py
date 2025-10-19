@@ -130,8 +130,12 @@ def deploy_with_toolkit(
         logger.info("   ⬆️ Pushing to ECR...")
         logger.info("   🏗️ Creating/Updating AgentCore Runtime...")
         
-        # Pass environment variables to launch, not configure
-        runtime.launch(env_vars=env_vars if env_vars else None)
+        # Pass environment variables and auto_update_on_conflict to launch
+        # auto_update_on_conflict=True allows updating existing runtimes
+        runtime.launch(
+            env_vars=env_vars if env_vars else None,
+            auto_update_on_conflict=True
+        )
         logger.info("✅ Launch completed (runtime created or updated)")
         
         # Step 5: Get status and extract ARN
