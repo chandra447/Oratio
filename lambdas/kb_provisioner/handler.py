@@ -116,16 +116,32 @@ def create_vector_bucket_and_index(kb_id: str, user_id: str) -> tuple:
         
         # Create vector index with Titan Embed v2 dimensions (1024) and cosine distance
         logger.info(f"Creating vector index: {index_name}")
-        index_response = s3vectors.create_index(
+        s3vectors.create_index(
             vectorBucketName=vector_bucket_name,
             indexName=index_name,
             dataType="float32",  # Data type for vector embeddings
             dimension=1024,  # Titan Embed Text v2 dimension
             distanceMetric="cosine",
         )
+        logger.info(f"Created vector index: {index_name}")
         
-        index_arn = index_response["indexArn"]
-        logger.info(f"Created vector index: {index_arn}")
+        # Get the index ARN by listing indexes (create_index returns empty response)
+        logger.info(f"Retrieving index ARN for: {index_name}")
+        list_response = s3vectors.list_indexes(
+            vectorBucketName=vector_bucket_name
+        )
+        
+        # Find the index we just created
+        index_arn = None
+        for index in list_response.get("indexes", []):
+            if index.get("indexName") == index_name:
+                index_arn = index.get("indexArn")
+                break
+        
+        if not index_arn:
+            raise Exception(f"Failed to retrieve ARN for index {index_name}")
+        
+        logger.info(f"Retrieved vector index ARN: {index_arn}")
         
         return vector_bucket_name, index_arn, index_name
         
