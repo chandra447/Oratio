@@ -121,6 +121,9 @@ def lambda_handler(event, context):
             elif isinstance(voice_personality_raw, str):
                 voice_personality_text = voice_personality_raw
 
+        # Create session ID (must be 33+ characters for AgentCore)
+        session_id = f"agent-creation-{agent_id}-{uuid.uuid4().hex}"
+        
         # Prepare input for AgentCreator meta-agent
         agent_creator_input = {
             "sop": sop,
@@ -128,11 +131,10 @@ def lambda_handler(event, context):
             "human_handoff_description": handoff_description,
             "bedrock_knowledge_base_id": bedrock_kb_id,
             "agent_id": agent_id,
+            "user_id": user_id,  # For trace correlation
+            "session_id": session_id,  # For OpenTelemetry baggage context
             "voice_personality_text": voice_personality_text,  # Pass as unstructured text
         }
-
-        # Create session ID (must be 33+ characters for AgentCore)
-        session_id = f"agent-creation-{agent_id}-{uuid.uuid4().hex}"
         
         # Prepare payload for AgentCore Runtime
         payload = json.dumps({"input": agent_creator_input})

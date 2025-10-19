@@ -10,7 +10,7 @@ from typing import Any, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from .pipeline import create_agent_creator_pipeline
+from .pipeline import create_agent_creator_pipeline, set_session_context
 
 # Environment configuration
 PORT = int(os.getenv("PORT", "8080"))
@@ -75,6 +75,8 @@ async def invoke_agent(request: InvocationRequest):
             "human_handoff_description": "Escalate for refunds",
             "bedrock_knowledge_base_id": "kb-123",
             "agent_id": "agent-456",
+            "user_id": "user-123",  # Optional, for trace correlation
+            "session_id": "agent-creation-agent-456-abc123",  # From AgentCore runtime
             "voice_personality": {
                 "identity": "Friendly customer service rep",
                 "demeanor": "Patient and empathetic",
@@ -87,7 +89,10 @@ async def invoke_agent(request: InvocationRequest):
     {
         "output": {
             "agent_code": "# Python code...",
-            "generated_prompt": "You are a customer service agent..."
+            "generated_prompt": {
+                "full_prompt": "System prompt for agent...",
+                "voice_prompt": "Voice-optimized prompt for Nova Sonic..."
+            }
         }
     }
     """
@@ -95,6 +100,7 @@ async def invoke_agent(request: InvocationRequest):
 
     logger.info("Received invocation request")
 
+    context_token = None
     try:
         # Ensure pipeline is initialized
         await initialize_pipeline()
@@ -112,7 +118,19 @@ async def invoke_agent(request: InvocationRequest):
                 detail=f"Missing required fields: {', '.join(missing_fields)}",
             )
 
-        logger.info(f"Processing agent creation for agent_id: {input_data.get('agent_id')}")
+        # Extract session and user info for tracing
+        agent_id = input_data.get("agent_id", "")
+        user_id = input_data.get("user_id")  # Optional user ID from payload
+        session_id = input_data.get("session_id")  # AgentCore runtime session ID
+        
+        logger.info(f"Processing agent creation - agent_id: {agent_id}, session_id: {session_id}")
+
+        # Set session context for distributed tracing (AWS best practice)
+        # Use session_id if available (from AgentCore), otherwise fall back to agent_id
+        trace_session_id = session_id if session_id else agent_id
+        
+        if trace_session_id:
+            context_token = set_session_context(trace_session_id, user_id)
 
         # Prepare initial state
         initial_state = {
@@ -182,6 +200,12 @@ async def invoke_agent(request: InvocationRequest):
                 "generated_prompt": None,
             }
         )
+    finally:
+        # Clean up OpenTelemetry context
+        if context_token is not None:
+            from opentelemetry import context
+            context.detach(context_token)
+            logger.debug("Detached session context from telemetry")
 
 
 @app.get("/ping")
