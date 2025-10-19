@@ -148,11 +148,16 @@ async def invoke_agent(request: InvocationRequest):
             )
 
         # Serialize SystemPrompt object to dict
-        # generated_prompt_obj is a SystemPrompt with full_prompt and voice_prompt
-        generated_prompt_dict = {
-            "full_prompt": getattr(generated_prompt_obj, "full_prompt", ""),
-            "voice_prompt": getattr(generated_prompt_obj, "voice_prompt", ""),
-        }
+        # generated_prompt_obj is a Pydantic SystemPrompt model with full_prompt and voice_prompt
+        if hasattr(generated_prompt_obj, "model_dump"):
+            # Use Pydantic's model_dump for proper serialization
+            generated_prompt_dict = generated_prompt_obj.model_dump()
+        else:
+            # Fallback for non-Pydantic objects
+            generated_prompt_dict = {
+                "full_prompt": getattr(generated_prompt_obj, "full_prompt", ""),
+                "voice_prompt": getattr(generated_prompt_obj, "voice_prompt", ""),
+            }
 
         logger.info("Agent creation completed successfully")
 

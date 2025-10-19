@@ -23,6 +23,12 @@ import dspy
 from langgraph.graph import END, StateGraph
 
 from openinference.instrumentation.dspy import DSPyInstrumentor
+from opentelemetry import trace as trace_api
+
+
+tracer_provider = trace_api.get_tracer_provider()
+trace_api.set_tracer_provider(tracer_provider=tracer_provider)
+
 
 DSPyInstrumentor().instrument()
 
