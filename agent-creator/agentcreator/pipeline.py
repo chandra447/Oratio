@@ -52,26 +52,35 @@ from .signatures.types import (
 logger = logging.getLogger(__name__)
 
 
-def set_session_context(agent_id: str, user_id: Optional[str] = None):
+def set_session_context(session_id: str, user_id: Optional[str] = None):
     """
     Set the session ID and user ID in OpenTelemetry baggage for trace correlation.
     
     This follows AWS best practices for distributed tracing, allowing all spans
     in the agent creation pipeline to be correlated by session/agent ID.
     
+    CloudWatch GenAI Observability uses these baggage keys to group traces:
+    - session.id: Groups all operations within a session
+    - user.id: Tracks which user initiated the operation
+    
     Args:
-        agent_id: The unique agent ID to track across all spans
+        session_id: The unique session/agent ID to track across all spans
         user_id: Optional user ID for additional correlation
     
     Returns:
         OpenTelemetry context token that can be used to restore previous context
     """
-    ctx = baggage.set_baggage("session.id", agent_id)
+    # Set session.id baggage (CloudWatch uses this for session grouping)
+    ctx = baggage.set_baggage("session.id", session_id)
+    
+    # Add user.id if provided
     if user_id:
         ctx = baggage.set_baggage("user.id", user_id, context=ctx)
     
+    # Attach context and log
     token = context.attach(ctx)
-    logger.info(f"Session ID '{agent_id}' attached to telemetry context")
+    logger.info(f"✅ OpenTelemetry baggage set - session.id: {session_id}, user.id: {user_id or 'N/A'}")
+    
     return token
 
 

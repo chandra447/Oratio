@@ -14,6 +14,7 @@ from typing import Dict, Any
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from bedrock_agentcore.memory import MemoryClient
 from strands.hooks import AgentInitializedEvent, HookProvider, HookRegistry, MessageAddedEvent
+from opentelemetry import baggage, context as otel_context
 #comment to trigger a build
 # Configure logging
 logging.basicConfig(
@@ -262,6 +263,15 @@ def invoke(payload: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
                 
                 session_id = payload.get('session_id', f"session_{actor_id}_{agent_id}_default")
                 
+                # Set OpenTelemetry baggage for session correlation
+                # This allows CloudWatch to group traces by session
+                ctx = baggage.set_baggage("session.id", session_id)
+                ctx = baggage.set_baggage("actor.id", actor_id, context=ctx)
+                ctx = baggage.set_baggage("agent.id", agent_id, context=ctx)
+                ctx = baggage.set_baggage("user.id", user_id, context=ctx)
+                context_token = otel_context.attach(ctx)
+                logger.info(f"✅ OpenTelemetry baggage set: session_id={session_id}, actor_id={actor_id}, agent_id={agent_id}")
+                
                 # Create memory hook provider with agent-specific memory_id
                 memory_hook = MemoryHookProvider(memory_client, agent_memory_id)
                 hooks.append(memory_hook)
@@ -274,6 +284,7 @@ def invoke(payload: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
                 
                 logger.info(f"Memory hooks enabled for actor_id={actor_id}, session_id={session_id}, memory_id={agent_memory_id}")
             else:
+                context_token = None
                 logger.info(f"Memory hooks disabled (agent_memory_id={'not configured' if not agent_memory_id else 'unavailable'})")
             
             # Call the agent's invoke function with hooks and state injection
@@ -291,6 +302,14 @@ def invoke(payload: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
                 'error_type': type(e).__name__
             }
         finally:
+            # Detach OpenTelemetry context
+            try:
+                if 'context_token' in locals() and context_token is not None:
+                    otel_context.detach(context_token)
+                    logger.debug("Detached OpenTelemetry baggage context")
+            except Exception as context_error:
+                logger.warning(f"Failed to detach context: {context_error}")
+            
             # Cleanup: Remove temporary file
             try:
                 if os.path.exists(tmp_file_path):
