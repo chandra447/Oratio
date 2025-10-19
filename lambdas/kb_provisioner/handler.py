@@ -222,6 +222,32 @@ def lambda_handler(event, context):
 
         logger.info(f"Created Bedrock KB: {bedrock_kb_id}")
 
+        # Wait for Knowledge Base to be ACTIVE before creating data source
+        logger.info(f"Waiting for Knowledge Base {bedrock_kb_id} to be ACTIVE...")
+        max_wait_time = 300  # 5 minutes
+        poll_interval = 10  # 10 seconds
+        elapsed_time = 0
+        
+        while elapsed_time < max_wait_time:
+            kb_status_response = bedrock_agent.get_knowledge_base(
+                knowledgeBaseId=bedrock_kb_id
+            )
+            kb_status = kb_status_response["knowledgeBase"]["status"]
+            logger.info(f"Knowledge Base status: {kb_status}")
+            
+            if kb_status == "ACTIVE":
+                logger.info("Knowledge Base is now ACTIVE")
+                break
+            elif kb_status == "FAILED":
+                failure_reasons = kb_status_response["knowledgeBase"].get("failureReasons", [])
+                raise Exception(f"Knowledge Base creation failed: {failure_reasons}")
+            
+            time.sleep(poll_interval)
+            elapsed_time += poll_interval
+        
+        if elapsed_time >= max_wait_time:
+            raise Exception(f"Timeout waiting for Knowledge Base {bedrock_kb_id} to be ACTIVE")
+
         # Step 3: Create S3 data source
         data_source_name = f"oratio-ds-{agent_id}"
         s3_bucket_arn = f"arn:aws:s3:::{KB_BUCKET}"
