@@ -23,43 +23,13 @@ from typing import Any, Dict, List, Optional, TypedDict
 import dspy
 from langgraph.graph import END, StateGraph
 
-from openinference.instrumentation.dspy import DSPyInstrumentor
+# OpenTelemetry imports for baggage context (session tracking)
 from opentelemetry import baggage, context, trace as trace_api
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
-
-# Configure OpenTelemetry TracerProvider with proper resource attributes
-resource = Resource(attributes={
-    SERVICE_NAME: "agentcreator-meta-agent",
-    SERVICE_VERSION: "1.0.0",
-    "deployment.environment": os.getenv("ENVIRONMENT", "production"),
-})
-
-# Create TracerProvider with resource
-tracer_provider = TracerProvider(resource=resource)
-
-# Configure span exporters
-# 1. Console exporter for local debugging (optional, can be removed in production)
-if os.getenv("OTEL_DEBUG", "false").lower() == "true":
-    console_processor = BatchSpanProcessor(ConsoleSpanExporter())
-    tracer_provider.add_span_processor(console_processor)
-
-# 2. OTLP exporter for sending traces to observability backend
-# Supports AWS X-Ray, CloudWatch, or any OTLP-compatible endpoint
-otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-if otlp_endpoint:
-    otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
-    otlp_processor = BatchSpanProcessor(otlp_exporter)
-    tracer_provider.add_span_processor(otlp_processor)
-
-# Set the global tracer provider
-trace_api.set_tracer_provider(tracer_provider)
-
-# Instrument DSPy with the configured tracer provider
-DSPyInstrumentor().instrument(tracer_provider=tracer_provider)
+# Note: AWS Bedrock AgentCore automatically sets up OpenTelemetry instrumentation
+# including TracerProvider and DSPy instrumentation. We only need to use baggage
+# for session context propagation. Do NOT create a new TracerProvider or call
+# DSPyInstrumentor().instrument() as AgentCore already does this.
 
 from .modules import (
     CodeGenerator,
