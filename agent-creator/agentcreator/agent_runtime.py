@@ -155,8 +155,17 @@ async def invoke_agent(request: InvocationRequest):
 
         # Run the pipeline
         logger.info("Running AgentCreator pipeline...")
-        result = await agent_pipeline.ainvoke(initial_state)
-        logger.info("Pipeline execution completed")
+        logger.info(f"Initial state keys: {list(initial_state.keys())}")
+        logger.info(f"SOP length: {len(initial_state.get('sop', ''))} characters")
+        logger.info(f"KB description length: {len(initial_state.get('knowledge_base_description', ''))} characters")
+        
+        try:
+            result = await agent_pipeline.ainvoke(initial_state)
+            logger.info("Pipeline execution completed")
+        except Exception as pipeline_error:
+            logger.error(f"Pipeline execution failed: {pipeline_error}")
+            logger.error(f"Pipeline error type: {type(pipeline_error).__name__}")
+            raise
 
         # Extract outputs
         agent_code = result.get("final_agent_code", "")
@@ -218,10 +227,23 @@ async def invoke_agent(request: InvocationRequest):
         # Log full exception details for debugging
         logger.error(f"Agent processing failed: {e}")
         logger.exception("Full exception details:")
+        
+        # Provide more helpful error messages for common issues
+        error_detail = str(e)
+        if "AdapterParseError" in str(type(e).__name__) or "LM Response: {}" in str(e):
+            error_detail = (
+                "The LLM returned an empty response. This could be due to: "
+                "(1) Content filtering by Bedrock, "
+                "(2) Model quota limits, "
+                "(3) Invalid prompt format, or "
+                "(4) Model configuration issues. "
+                f"Original error: {str(e)[:200]}"
+            )
+        
         # Raise as HTTPException for proper error response (AWS sample pattern)
         raise HTTPException(
             status_code=500,
-            detail=f"Agent processing failed: {str(e)}"
+            detail=f"Agent processing failed: {error_detail}"
         )
     finally:
         # Clean up OpenTelemetry context
