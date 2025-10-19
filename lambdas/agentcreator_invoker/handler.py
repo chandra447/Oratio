@@ -13,7 +13,16 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 dynamodb = boto3.resource("dynamodb")
 s3_client = boto3.client("s3")
-bedrock_agentcore_client = boto3.client("bedrock-agentcore")
+
+# Configure bedrock-agentcore client with extended timeout for long-running agent operations
+# AgentCreator pipeline can take 2-5 minutes (SOP parsing, plan drafting, code generation, etc.)
+from botocore.config import Config
+agentcore_config = Config(
+    read_timeout=600,  # 10 minutes for agent generation
+    connect_timeout=10,
+    retries={'max_attempts': 0}  # Disable retries to avoid duplicate agent generation
+)
+bedrock_agentcore_client = boto3.client("bedrock-agentcore", config=agentcore_config)
 ssm_client = boto3.client("ssm")
 
 # Import MemoryClient for creating agent-specific memory

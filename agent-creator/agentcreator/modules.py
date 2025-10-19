@@ -19,6 +19,7 @@ from .signatures import (
     PlanReviewerSignature,
     PromptGeneratorSignature,
     SOPParserSignature,
+    VoicePersonalityParser,
 )
 from .signatures.types import (
     PlanReview,
@@ -305,3 +306,59 @@ class PromptGenerator(dspy.Module):
             voice_personality=voice_personality,
         )
         return result.system_prompt
+
+
+class VoicePersonalityParserModule(dspy.Module):
+    """Parse unstructured voice personality text into structured format
+    
+    Uses Predict (simple completion) for extracting structured data.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.parser = dspy.Predict(VoicePersonalityParser)
+
+    async def aforward(
+        self,
+        voice_personality_text: str,
+        sop: str,
+        knowledge_base_description: str
+    ) -> Dict[str, str]:
+        """Parse voice personality text into structured fields
+        
+        Args:
+            voice_personality_text: Unstructured text describing voice personality
+            sop: Standard Operating Procedure for context
+            knowledge_base_description: Knowledge domain description for context
+            
+        Returns:
+            Dictionary with structured voice personality fields:
+            - identity
+            - task
+            - demeanor
+            - tone
+            - formality_level
+            - enthusiasm_level
+            - filler_words
+            - pacing
+            - additional_instructions
+        """
+        
+        result = await self.parser.acall(
+            voice_personality_text=voice_personality_text,
+            sop=sop,
+            knowledge_base_description=knowledge_base_description,
+        )
+        
+        # Convert result to dictionary
+        return {
+            "identity": result.identity,
+            "task": result.task,
+            "demeanor": result.demeanor,
+            "tone": result.tone,
+            "formality_level": result.formality_level,
+            "enthusiasm_level": result.enthusiasm_level,
+            "filler_words": result.filler_words,
+            "pacing": result.pacing,
+            "additional_instructions": result.additional_instructions,
+        }

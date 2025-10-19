@@ -139,13 +139,20 @@ async def invoke_agent(request: InvocationRequest):
 
         # Extract outputs
         agent_code = result.get("final_agent_code", "")
-        generated_prompt = result.get("generated_prompt", "")
+        generated_prompt_obj = result.get("generated_prompt")
 
-        if not agent_code or not generated_prompt:
+        if not agent_code or not generated_prompt_obj:
             raise HTTPException(
                 status_code=500,
                 detail="Pipeline did not generate valid output",
             )
+
+        # Serialize SystemPrompt object to dict
+        # generated_prompt_obj is a SystemPrompt with full_prompt and voice_prompt
+        generated_prompt_dict = {
+            "full_prompt": getattr(generated_prompt_obj, "full_prompt", ""),
+            "voice_prompt": getattr(generated_prompt_obj, "voice_prompt", ""),
+        }
 
         logger.info("Agent creation completed successfully")
 
@@ -153,7 +160,7 @@ async def invoke_agent(request: InvocationRequest):
         return InvocationResponse(
             output={
                 "agent_code": agent_code,
-                "generated_prompt": generated_prompt,
+                "generated_prompt": generated_prompt_dict,
             }
         )
 

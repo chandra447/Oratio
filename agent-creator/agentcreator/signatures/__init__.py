@@ -19,6 +19,7 @@ from .plan_reviewer import PlanReviewerSignature
 from .code_generator import CodeGeneratorSignature
 from .code_reviewer import CodeReviewerSignature
 from .prompt_generator import PromptGeneratorSignature
+from .voice_personality_parser import VoicePersonalityParser
 from .types import (
     PlanReview,
     CodeReview,
@@ -35,6 +36,7 @@ __all__ = [
     "CodeGeneratorSignature",
     "CodeReviewerSignature",
     "PromptGeneratorSignature",
+    "VoicePersonalityParser",
     "PlanReview",
     "CodeReview",
     "Requirements",

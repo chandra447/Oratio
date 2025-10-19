@@ -3,11 +3,12 @@ LangGraph Pipeline for AgentCreator
 Orchestrates the DSPy modules in a workflow with review cycles
 
 Pipeline Flow:
-1. Parse SOP → Extract structured requirements
-2. Draft Plan → Create agent architecture (with review cycle up to 3 iterations)
-3. Generate Code → Use ReAct with code interpreter tool for validation
-4. Review Code → Validate generated code
-5. Generate Prompt → Create system prompt with personality
+1. Parse Voice Personality → Convert unstructured text to structured format (if provided)
+2. Parse SOP → Extract structured requirements
+3. Draft Plan → Create agent architecture (with review cycle up to 3 iterations)
+4. Generate Code → Use ReAct with code interpreter tool for validation
+5. Review Code → Validate generated code
+6. Generate Prompt → Create system prompt with personality
 
 DSPy Module Selection:
 - ChainOfThought: Used for reasoning tasks (parsing, planning, reviewing)
@@ -32,6 +33,7 @@ from .modules import (
     PlanReviewer,
     PromptGenerator,
     SOPParser,
+    VoicePersonalityParserModule,
 )
 from .signatures.types import (
     PlanReview,
@@ -57,7 +59,8 @@ class AgentCreatorState(TypedDict, total=False):
     human_handoff_description: str
     bedrock_knowledge_base_id: str
     agent_id: str
-    voice_personality: Optional[Dict[str, Any]]
+    voice_personality_text: Optional[str]  # Raw unstructured text from user
+    voice_personality: Optional[Dict[str, Any]]  # Structured voice personality (parsed)
 
     # Intermediate fields (populated during pipeline execution)
     requirements: Requirements
@@ -85,11 +88,32 @@ class AgentCreatorState(TypedDict, total=False):
 sop_parser = SOPParser()
 prompt_generator = PromptGenerator()
 plan_reviewer = PlanReviewer()
+voice_personality_parser = VoicePersonalityParserModule()
 
 # PlanDrafter, CodeGenerator and CodeReviewer initialized separately with MCP tools
 plan_drafter = None
 code_generator = None
 code_reviewer = None
+
+
+async def parse_voice_personality_node(state: AgentCreatorState) -> AgentCreatorState:
+    """Parse unstructured voice personality text into structured format"""
+    
+    # If voice_personality_text is provided, parse it
+    if state.get("voice_personality_text"):
+        logger.info("Parsing voice personality text...")
+        
+        structured_personality = await voice_personality_parser.aforward(
+            voice_personality_text=state["voice_personality_text"],
+            sop=state["sop"],
+            knowledge_base_description=state["knowledge_base_description"],
+        )
+        
+        logger.info(f"Voice personality parsed: {structured_personality}")
+        return {**state, "voice_personality": structured_personality}
+    else:
+        logger.info("No voice personality text provided, skipping parsing")
+        return state
 
 
 async def parse_sop_node(state: AgentCreatorState) -> AgentCreatorState:
@@ -325,6 +349,7 @@ async def create_agent_creator_pipeline():
     workflow = StateGraph(AgentCreatorState)
 
     # Add nodes
+    workflow.add_node("parse_voice_personality", parse_voice_personality_node)
     workflow.add_node("parse_sop", parse_sop_node)
     workflow.add_node("draft_plan", draft_plan_node)
     workflow.add_node("review_plan", review_plan_node)
@@ -332,10 +357,11 @@ async def create_agent_creator_pipeline():
     workflow.add_node("review_code", review_code_node)
     workflow.add_node("generate_prompt", generate_prompt_node)
 
-    # Set entry point
-    workflow.set_entry_point("parse_sop")
+    # Set entry point - start with voice personality parsing
+    workflow.set_entry_point("parse_voice_personality")
 
     # Add edges
+    workflow.add_edge("parse_voice_personality", "parse_sop")
     workflow.add_edge("parse_sop", "draft_plan")
     workflow.add_edge("draft_plan", "review_plan")
 
