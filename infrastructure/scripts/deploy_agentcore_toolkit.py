@@ -111,31 +111,27 @@ def deploy_with_toolkit(
         # Step 3: Configure the runtime
         logger.info("⚙️ Configuring runtime...")
         
-        config_kwargs = {
-            "execution_role": role_arn,
-            "entrypoint": entrypoint,
-            "requirements_file": requirements_file,
-            "region": region,
-            "agent_name": sanitized_name,
-            "auto_create_ecr": True,
-        }
-        
-        # Add environment variables if provided
-        if env_vars:
-            logger.info(f"   🔧 Environment Variables: {json.dumps(env_vars, indent=2)}")
-            config_kwargs["environment_variables"] = env_vars
-        
-        runtime.configure(**config_kwargs)
+        runtime.configure(
+            execution_role=role_arn,
+            entrypoint=entrypoint,
+            requirements_file=requirements_file,
+            region=region,
+            agent_name=sanitized_name,
+            auto_create_ecr=True,
+        )
         logger.info("✅ Configuration completed")
         
         # Step 4: Launch the runtime
         # Note: runtime.launch() is idempotent - it will create if new, update if exists
         logger.info("🚀 Launching runtime (this may take several minutes)...")
+        if env_vars:
+            logger.info(f"   🔧 Environment Variables: {json.dumps(env_vars, indent=2)}")
         logger.info("   📦 Building container image...")
         logger.info("   ⬆️ Pushing to ECR...")
         logger.info("   🏗️ Creating/Updating AgentCore Runtime...")
         
-        runtime.launch()
+        # Pass environment variables to launch, not configure
+        runtime.launch(env_vars=env_vars if env_vars else None)
         logger.info("✅ Launch completed (runtime created or updated)")
         
         # Step 5: Get status and extract ARN
