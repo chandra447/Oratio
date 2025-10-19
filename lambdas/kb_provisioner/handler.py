@@ -129,6 +129,8 @@ def create_vector_bucket_and_index(kb_id: str, user_id: str) -> tuple:
         logger.info(f"Created S3 Vector bucket: {vector_bucket_name}")
         
         # Create vector index with Titan Embed v2 dimensions (1024) and cosine distance
+        # Configure metadata to allow Bedrock's automatic metadata (AMAZON_BEDROCK_TEXT, AMAZON_BEDROCK_METADATA)
+        # to be non-filterable, allowing up to 40KB per vector instead of 2KB limit
         logger.info(f"Creating vector index: {index_name}")
         s3vectors.create_index(
             vectorBucketName=vector_bucket_name,
@@ -136,8 +138,14 @@ def create_vector_bucket_and_index(kb_id: str, user_id: str) -> tuple:
             dataType="float32",  # Data type for vector embeddings
             dimension=1024,  # Titan Embed Text v2 dimension
             distanceMetric="cosine",
+            metadataConfiguration={
+                "nonFilterableMetadataKeys": [
+                    "AMAZON_BEDROCK_TEXT",      # Bedrock adds this automatically - can be large
+                    "AMAZON_BEDROCK_METADATA",  # Bedrock adds this automatically - can be large
+                ]
+            },
         )
-        logger.info(f"Created vector index: {index_name}")
+        logger.info(f"Created vector index: {index_name} with non-filterable metadata keys")
         
         # Get the index ARN by listing indexes (create_index returns empty response)
         logger.info(f"Retrieving index ARN for: {index_name}")
