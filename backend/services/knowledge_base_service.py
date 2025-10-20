@@ -16,19 +16,21 @@ class KnowledgeBaseService:
         self.dynamodb = dynamodb_client
         self.table_name = table_name
 
-    def create_knowledge_base(self, kb_data: KnowledgeBaseCreate) -> Optional[KnowledgeBase]:
+    def create_knowledge_base(self, kb_data: KnowledgeBaseCreate, kb_id: Optional[str] = None) -> Optional[KnowledgeBase]:
         """
         Create a new knowledge base entry in DynamoDB
 
         Args:
             kb_data: Knowledge base creation data
+            kb_id: Optional pre-generated knowledge base ID (if None, generates new UUID)
 
         Returns:
             Optional[KnowledgeBase]: Created knowledge base or None if failed
         """
         try:
-            # Generate unique ID
-            kb_id = str(uuid4())
+            # Use provided ID or generate unique ID
+            if kb_id is None:
+                kb_id = str(uuid4())
 
             # Create knowledge base object
             kb = KnowledgeBase(
@@ -41,8 +43,8 @@ class KnowledgeBaseService:
                 updated_at=int(datetime.now().timestamp()),
             )
 
-            # Convert to dict for DynamoDB
-            item = kb.model_dump()
+            # Convert to dict for DynamoDB (use aliases for camelCase keys)
+            item = kb.model_dump(by_alias=True)
 
             # Put item in DynamoDB
             success = self.dynamodb.put_item(self.table_name, item)

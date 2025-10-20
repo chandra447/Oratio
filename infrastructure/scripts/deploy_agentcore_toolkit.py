@@ -118,6 +118,7 @@ def deploy_with_toolkit(
             region=region,
             agent_name=sanitized_name,
             auto_create_ecr=True,
+            disable_otel=False
         )
         logger.info("✅ Configuration completed")
         

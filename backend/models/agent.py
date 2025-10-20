@@ -59,42 +59,42 @@ class VoicePersonality(BaseModel):
 class Agent(BaseModel):
     """Agent model for storing agent configuration and metadata"""
 
-    agent_id: str = Field(..., description="Unique identifier for the agent")
-    user_id: str = Field(..., description="User ID who owns this agent")
-    agent_name: str = Field(..., description="Human-readable name for the agent")
-    agent_type: AgentType = Field(..., description="Type of agent (voice, text, or both)")
+    agent_id: str = Field(..., description="Unique identifier for the agent", alias="agentId")
+    user_id: str = Field(..., description="User ID who owns this agent", alias="userId")
+    agent_name: str = Field(..., description="Human-readable name for the agent", alias="agentName")
+    agent_type: AgentType = Field(..., description="Type of agent (voice, text, or both)", alias="agentType")
     sop: str = Field(..., description="Standard Operating Procedure for the agent")
-    knowledge_base_id: str = Field(..., description="Associated knowledge base ID")
+    knowledge_base_id: str = Field(..., description="Associated knowledge base ID", alias="knowledgeBaseId")
     knowledge_base_description: str = Field(
-        ..., description="Description of when to use the knowledge base"
+        ..., description="Description of when to use the knowledge base", alias="knowledgeBaseDescription"
     )
     human_handoff_description: str = Field(
-        ..., description="Description of when to escalate to human"
+        ..., description="Description of when to escalate to human", alias="humanHandoffDescription"
     )
     voice_personality: Optional[VoicePersonality] = Field(
-        default=None, description="Voice agent personality configuration"
+        default=None, description="Voice agent personality configuration", alias="voicePersonality"
     )
     voice_config: Optional[Dict] = Field(
-        default=None, description="Additional voice-specific technical configuration"
+        default=None, description="Additional voice-specific technical configuration", alias="voiceConfig"
     )
-    text_config: Optional[Dict] = Field(default=None, description="Text-specific configuration")
+    text_config: Optional[Dict] = Field(default=None, description="Text-specific configuration", alias="textConfig")
     bedrock_knowledge_base_arn: Optional[str] = Field(
-        None, description="Bedrock Knowledge Base ARN"
+        None, description="Bedrock Knowledge Base ARN", alias="bedrockKnowledgeBaseArn"
     )
     agentcore_runtime_arn: Optional[str] = Field(
-        None, description="Bedrock AgentCore Runtime ARN (shared Chameleon loader)"
+        None, description="Bedrock AgentCore Runtime ARN (shared Chameleon loader)", alias="agentcoreRuntimeArn"
     )
     generated_prompt: Optional[str] = Field(
-        None, description="Generated system prompt for the Strands agent (embedded in code)"
+        None, description="Generated system prompt for the Strands agent (embedded in code)", alias="generatedPrompt"
     )
     voice_prompt: Optional[str] = Field(
-        None, description="Voice-optimized system prompt for Nova Sonic interface"
+        None, description="Voice-optimized system prompt for Nova Sonic interface", alias="voicePrompt"
     )
     agent_code_s3_path: Optional[str] = Field(
-        None, description="S3 path to generated agent_file.py"
+        None, description="S3 path to generated agent_file.py", alias="agentCodeS3Path"
     )
     memory_id: Optional[str] = Field(
-        None, description="AgentCore Memory resource ID for conversation history"
+        None, description="AgentCore Memory resource ID for conversation history", alias="memoryId"
     )
     status: AgentStatus = Field(
         default=AgentStatus.CREATING, description="Current status of the agent"
@@ -102,15 +102,18 @@ class Agent(BaseModel):
     created_at: int = Field(
         default_factory=lambda: int(datetime.now().timestamp()),
         description="Creation timestamp",
+        alias="createdAt"
     )
     updated_at: int = Field(
         default_factory=lambda: int(datetime.now().timestamp()),
         description="Last update timestamp",
+        alias="updatedAt"
     )
     # Note: websocket_url and api_endpoint removed - constructed on-the-fly in API
 
     class Config:
         use_enum_values = True
+        populate_by_name = True  # Allow both snake_case and camelCase
 
 
 class AgentCreate(BaseModel):

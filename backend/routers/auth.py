@@ -4,19 +4,20 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Annotated
 import logging
 
-from backend.models.user import (
+from models.user import (
     UserCreate,
     UserLogin,
+    UserConfirm,
     TokenResponse,
     TokenRefresh,
     UserProfile
 )
-from backend.services.auth_service import auth_service
-from backend.dependencies import get_current_user
+from services.auth_service import auth_service
+from dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/auth", tags=["authentication"])
+router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -48,7 +49,7 @@ async def register(user_data: UserCreate):
 
 
 @router.post("/confirm")
-async def confirm_registration(email: str, confirmation_code: str):
+async def confirm_registration(confirm_data: UserConfirm):
     """
     Confirm user email with verification code.
     
@@ -58,7 +59,7 @@ async def confirm_registration(email: str, confirmation_code: str):
     Returns success status.
     """
     try:
-        await auth_service.confirm_registration(email, confirmation_code)
+        await auth_service.confirm_registration(confirm_data.email, confirm_data.confirmation_code)
         return {"message": "Email confirmed successfully. You can now log in."}
     except ValueError as e:
         raise HTTPException(

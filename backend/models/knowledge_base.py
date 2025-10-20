@@ -16,11 +16,11 @@ class KnowledgeBaseStatus(str, Enum):
 class KnowledgeBase(BaseModel):
     """Knowledge Base model for storing document metadata and Bedrock KB info"""
 
-    knowledge_base_id: str = Field(..., description="Unique identifier for the knowledge base")
-    user_id: str = Field(..., description="User ID who owns this knowledge base")
-    s3_path: str = Field(..., description="S3 path where documents are stored")
+    knowledge_base_id: str = Field(..., description="Unique identifier for the knowledge base", alias="knowledgeBaseId")
+    user_id: str = Field(..., description="User ID who owns this knowledge base", alias="userId")
+    s3_path: str = Field(..., description="S3 path where documents are stored", alias="s3Path")
     bedrock_knowledge_base_id: Optional[str] = Field(
-        None, description="Bedrock Knowledge Base ID after provisioning"
+        None, description="Bedrock Knowledge Base ID after provisioning", alias="bedrockKnowledgeBaseId"
     )
     status: KnowledgeBaseStatus = Field(
         default=KnowledgeBaseStatus.NOTREADY, description="Current status of the knowledge base"
@@ -28,18 +28,22 @@ class KnowledgeBase(BaseModel):
     folder_file_descriptions: Dict[str, str] = Field(
         default_factory=dict,
         description="Mapping of folder/file paths to their descriptions",
+        alias="folderFileDescriptions"
     )
     created_at: int = Field(
         default_factory=lambda: int(datetime.now().timestamp()),
         description="Creation timestamp",
+        alias="createdAt"
     )
     updated_at: int = Field(
         default_factory=lambda: int(datetime.now().timestamp()),
         description="Last update timestamp",
+        alias="updatedAt"
     )
 
     class Config:
         use_enum_values = True
+        populate_by_name = True  # Allow both snake_case and camelCase
 
 
 class KnowledgeBaseCreate(BaseModel):

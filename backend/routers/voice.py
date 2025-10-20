@@ -11,14 +11,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends, status
 from pydantic import BaseModel
-
-from aws_sdk_bedrock_runtime.client import BedrockRuntimeClient, InvokeModelWithBidirectionalStreamOperationInput
-from aws_sdk_bedrock_runtime.models import InvokeModelWithBidirectionalStreamInputChunk, BidirectionalInputPayloadPart
-from aws_sdk_bedrock_runtime.config import Config
-from smithy_aws_core.identity.environment import EnvironmentCredentialsResolver
-from rx.subject import Subject
-from rx import operators as ops
-from rx.scheduler.eventloop import AsyncIOScheduler
+import boto3
 
 from config import settings
 from dependencies import get_agent_service, get_api_key_service, get_agent_invocation_service
@@ -31,6 +24,8 @@ from models.api_key import APIKeyPermission
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/voice", tags=["voice"])
+
+print("\n\n✅✅✅ VOICE ROUTER MODULE LOADED ✅✅✅\n\n", flush=True)
 
 
 class NovaSonicStreamManager:
@@ -280,6 +275,9 @@ class NovaSonicStreamManager:
     
     async def initialize_stream(self, system_prompt: str):
         """Initialize Nova Sonic bidirectional stream"""
+        logger.info(f"[NovaSonic] Initializing stream for agent_id={self.agent_id}, session_id={self.session_id}")
+        logger.info(f"[NovaSonic] System prompt length: {len(system_prompt)} chars")
+        
         if not self.bedrock_client:
             self._initialize_client()
         
@@ -287,15 +285,18 @@ class NovaSonicStreamManager:
         
         try:
             # Initialize bidirectional stream
+            logger.info("[NovaSonic] Invoking Nova Sonic model...")
             self.stream_response = await self.bedrock_client.invoke_model_with_bidirectional_stream(
                 InvokeModelWithBidirectionalStreamOperationInput(model_id="amazon.nova-sonic-v1:0")
             )
+            logger.info("[NovaSonic] ✅ Nova Sonic stream created")
             
             self.is_active = True
             
             # Create tool configuration with Chameleon
             tools = self._create_chameleon_tool_definition()
             tools_json = json.dumps(tools)
+            logger.info(f"[NovaSonic] Tool configuration: {tools_json[:200]}...")
             
             # Send initialization events
             prompt_event = self.START_PROMPT_EVENT % (self.prompt_name, tools_json)
@@ -305,12 +306,17 @@ class NovaSonicStreamManager:
             
             init_events = [self.START_SESSION_EVENT, prompt_event, text_content_start, text_content, text_content_end]
             
-            for event in init_events:
+            logger.info(f"[NovaSonic] Sending {len(init_events)} initialization events...")
+            for idx, event in enumerate(init_events):
                 await self.send_raw_event(event)
+                logger.debug(f"[NovaSonic] Sent init event {idx+1}/{len(init_events)}")
+            
+            logger.info("[NovaSonic] ✅ All initialization events sent")
             
             # Start response processing
             asyncio.create_task(self._process_responses())
             asyncio.create_task(self._stream_audio_to_websocket())
+            logger.info("[NovaSonic] Response processing tasks started")
             
             # Setup RxPy subscriptions
             self.input_subject.pipe(
@@ -327,7 +333,7 @@ class NovaSonicStreamManager:
                 on_error=lambda e: logger.error(f"Audio stream error: {e}")
             )
             
-            logger.info("[NovaSonic] Stream initialized successfully")
+            logger.info("[NovaSonic] ✅ Stream initialized successfully")
             return self
             
         except Exception as e:
@@ -365,6 +371,7 @@ class NovaSonicStreamManager:
                 blob.decode('utf-8')
             )
             await self.send_raw_event(audio_event)
+            logger.debug(f"[NovaSonic] 🎤 Sent audio chunk: {len(audio_bytes)} bytes")
         except Exception as e:
             logger.error(f"[NovaSonic] Error processing audio: {e}")
     
@@ -378,8 +385,10 @@ class NovaSonicStreamManager:
     
     async def send_audio_content_start_event(self):
         """Start audio content"""
+        logger.info("[NovaSonic] 🎤 Starting audio content stream...")
         content_start_event = self.CONTENT_START_EVENT % (self.prompt_name, self.audio_content_name)
         await self.send_raw_event(content_start_event)
+        logger.info("[NovaSonic] ✅ Audio content stream started")
     
     async def send_audio_content_end_event(self):
         """End audio content"""
@@ -388,6 +397,7 @@ class NovaSonicStreamManager:
     
     async def _process_responses(self):
         """Process responses from Nova Sonic"""
+        logger.info("[NovaSonic] 📡 Starting response processing loop...")
         try:
             while self.is_active:
                 try:
@@ -398,6 +408,8 @@ class NovaSonicStreamManager:
                         response_data = result.value.bytes_.decode('utf-8')
                         json_data = json.loads(response_data)
                         
+                        logger.debug(f"[NovaSonic] 📥 Received event: {list(json_data.get('event', {}).keys())}")
+                        
                         if 'event' in json_data:
                             event = json_data['event']
                             
@@ -405,6 +417,8 @@ class NovaSonicStreamManager:
                             if 'textOutput' in event:
                                 text_content = event['textOutput']['content']
                                 role = event['textOutput'].get('role', 'ASSISTANT')
+                                
+                                logger.info(f"[NovaSonic] 💬 Text output ({role}): {text_content[:100]}...")
                                 
                                 # Log to conversation history
                                 self.conversation_logger.log_turn(role, text_content, "text")
@@ -415,12 +429,14 @@ class NovaSonicStreamManager:
                                     "role": role.lower(),
                                     "content": text_content
                                 })
+                                logger.info(f"[NovaSonic] ✅ Sent transcript to WebSocket")
                             
                             # Handle audio output
                             elif 'audioOutput' in event:
                                 audio_content = event['audioOutput']['content']
                                 audio_bytes = base64.b64decode(audio_content)
                                 await self.audio_output_queue.put(audio_bytes)
+                                logger.debug(f"[NovaSonic] 🔊 Queued audio chunk: {len(audio_bytes)} bytes")
                             
                             # Handle tool use (Chameleon invocation)
                             elif 'toolUse' in event:
@@ -429,7 +445,8 @@ class NovaSonicStreamManager:
                                 tool_name = tool_use['name']
                                 tool_input = json.loads(tool_use['input'])
                                 
-                                logger.info(f"[NovaSonic] Tool use: {tool_name} ({tool_use_id})")
+                                logger.info(f"[NovaSonic] 🔧 Tool use: {tool_name} ({tool_use_id})")
+                                logger.info(f"[NovaSonic] Tool input: {tool_input}")
                                 
                                 # Send tool call notification to WebSocket
                                 await self.websocket.send_json({
@@ -442,6 +459,8 @@ class NovaSonicStreamManager:
                                 if tool_name == "business_agent":
                                     query = tool_input.get("query", "")
                                     result_text = await self._invoke_chameleon_tool(tool_use_id, query)
+                                    
+                                    logger.info(f"[NovaSonic] 🔧 Tool result: {result_text[:100]}...")
                                     
                                     # Send tool result back to Nova Sonic
                                     tool_result_event = self.TOOL_RESULT_EVENT % (
@@ -457,6 +476,7 @@ class NovaSonicStreamManager:
                                         "tool": tool_name,
                                         "result": result_text[:200]  # Truncate for UI
                                     })
+                                    logger.info(f"[NovaSonic] ✅ Tool result sent")
                         
                         self.output_subject.on_next(json_data)
                         
@@ -527,15 +547,17 @@ async def voice_agent_websocket(
     agent_id: str,
     actor_id: str,
     session_id: str,
-    api_key: str = Query(..., alias="api_key"),
-    agent_service: AgentService = Depends(get_agent_service),
-    api_key_service: APIKeyService = Depends(get_api_key_service),
-    invocation_service: AgentInvocationService = Depends(get_agent_invocation_service),
+    api_key: str = Query(None, alias="api_key"),
+    test: bool = Query(False, alias="test"),
 ):
     """
     Voice agent WebSocket endpoint
     
     Handles bidirectional voice streaming with Nova Sonic + Chameleon integration
+    
+    Query params:
+        - api_key: API key for authentication (required in production)
+        - test: Set to true for test mode (bypasses API key validation)
     
     Client sends: {"type": "audio", "data": "<base64_audio>"}
     Client receives:
@@ -544,50 +566,119 @@ async def voice_agent_websocket(
         - {"type": "tool_call", "tool": "business_agent", "input": {...}} - Tool invocation
         - {"type": "tool_result", "tool": "business_agent", "result": "..."} - Tool result
     """
+    print(f"\n\n🚀🚀🚀 VOICE FUNCTION CALLED: agent_id={agent_id}, test={test} 🚀🚀🚀\n\n", flush=True)
+    logger.info(f"[Voice] 🚀 FUNCTION ENTRY: agent_id={agent_id}, test={test}")
+    
+    # Initialize services manually with proper dependencies
+    from aws.dynamodb_client import DynamoDBClient
+    from services.agent_service import AgentService
+    from services.api_key_service import APIKeyService
+    from services.agent_invocation_service import AgentInvocationService
+    
+    dynamodb_client = DynamoDBClient(region_name=settings.AWS_REGION)
+    
+    agent_service = AgentService(dynamodb_client=dynamodb_client)
+    api_key_service = APIKeyService(dynamodb_client=dynamodb_client)
+    invocation_service = AgentInvocationService()
+    
     stream_manager = None
+    user_id = None
     
     try:
+        logger.info("[Voice] 🚀 INSIDE TRY BLOCK")
         # Accept WebSocket connection
         await websocket.accept()
-        logger.info(f"[Voice] WebSocket connected: agent={agent_id}, actor={actor_id}, session={session_id}")
+        logger.info(f"[Voice] ✅ WebSocket accepted")
+        logger.info(f"[Voice] Parameters: agent={agent_id}, actor={actor_id}, session={session_id}, test={test}")
         
-        # Step 1: Validate API key
-        validation = api_key_service.validate_key_for_agent(api_key=api_key, agent_id=agent_id)
-        if not validation.valid:
-            await websocket.send_json({"type": "error", "message": validation.reason})
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-        
-        # Check voice permission
-        if APIKeyPermission.VOICE not in validation.permissions:
-            await websocket.send_json({"type": "error", "message": "API key does not have voice permission"})
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
+        # Step 1: Validate API key (skip in test mode)
+        logger.info(f"[Voice] Starting authentication (test mode: {test})")
+        if test:
+            # Test mode: retrieve agent to get user_id
+            import boto3
+            dynamodb = boto3.resource('dynamodb', region_name=settings.AWS_REGION)
+            table = dynamodb.Table(settings.AGENTS_TABLE)
+            response = table.query(
+                IndexName='agentId-index',
+                KeyConditionExpression='agentId = :agent_id',
+                ExpressionAttributeValues={
+                    ':agent_id': agent_id
+                },
+                Limit=1
+            )
+            items = response.get('Items', [])
+            if not items:
+                await websocket.send_json({"type": "error", "message": "Agent not found"})
+                await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+                return
+            user_id = items[0].get("userId")
+            logger.info(f"[Voice] Test mode: using user_id={user_id}")
+        else:
+            # Production mode: validate API key
+            if not api_key:
+                await websocket.send_json({"type": "error", "message": "API key required"})
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            
+            validation = api_key_service.validate_key_for_agent(api_key=api_key, agent_id=agent_id)
+            if not validation.valid:
+                await websocket.send_json({"type": "error", "message": validation.reason})
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            
+            # Check voice permission
+            if APIKeyPermission.VOICE not in validation.permissions:
+                await websocket.send_json({"type": "error", "message": "API key does not have voice permission"})
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            
+            user_id = validation.user_id
         
         # Step 2: Get agent details
-        agent = agent_service.get_agent(user_id=validation.user_id, agent_id=agent_id)
+        logger.info(f"[Voice] Fetching agent details for user_id={user_id}, agent_id={agent_id}")
+        try:
+            agent = agent_service.get_agent(user_id=user_id, agent_id=agent_id)
+            logger.info(f"[Voice] ✅ Agent retrieved: {agent.agent_name if agent else 'None'}")
+        except Exception as e:
+            logger.error(f"[Voice] ❌ Failed to get agent: {e}", exc_info=True)
+            await websocket.send_json({"type": "error", "message": f"Failed to retrieve agent: {str(e)}"})
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+            return
+        
         if not agent or agent.status != "active":
+            logger.warning(f"[Voice] Agent not found or not active: status={agent.status if agent else 'None'}")
             await websocket.send_json({"type": "error", "message": "Agent not found or not active"})
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
             return
         
         if not agent.agentcore_runtime_arn:
+            logger.warning(f"[Voice] Agent missing agentcore_runtime_arn")
             await websocket.send_json({"type": "error", "message": "Agent not properly deployed"})
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
             return
         
+        logger.info(f"[Voice] Agent validated: name={agent.agent_name}, runtime_arn={agent.agentcore_runtime_arn[:50]}...")
+        
         # Step 3: Initialize Nova Sonic stream with Chameleon
-        stream_manager = NovaSonicStreamManager(
-            agent_id=agent_id,
-            user_id=validation.user_id,
-            actor_id=actor_id,
-            session_id=session_id,
-            websocket=websocket,
-            invocation_service=invocation_service,
-            chameleon_runtime_arn=agent.agentcore_runtime_arn,  # Chameleon ARN
-            memory_id=agent.memory_id or f"voice-{agent_id}",
-            region=settings.AWS_REGION
-        )
+        logger.info("[Voice] Creating NovaSonicStreamManager...")
+        try:
+            stream_manager = NovaSonicStreamManager(
+                agent_id=agent_id,
+                user_id=user_id,
+                actor_id=actor_id,
+                session_id=session_id,
+                websocket=websocket,
+                invocation_service=invocation_service,
+                chameleon_runtime_arn=agent.agentcore_runtime_arn,  # Chameleon ARN
+                memory_id=agent.memory_id or f"voice-{agent_id}",
+                region=settings.AWS_REGION
+            )
+            logger.info("[Voice] ✅ NovaSonicStreamManager created")
+        except Exception as e:
+            logger.error(f"[Voice] ❌ Failed to create stream manager: {e}", exc_info=True)
+            await websocket.send_json({"type": "error", "message": f"Failed to initialize voice manager: {str(e)}"})
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+            return
         
         # Use agent's voice_prompt (Nova Sonic optimized) or fall back to generated_prompt or default
         base_prompt = (
@@ -600,18 +691,39 @@ async def voice_agent_websocket(
         system_prompt = f"Your name is {agent.agent_name}. {base_prompt}"
         
         logger.info(f"[Voice] Agent name: {agent.agent_name}")
+        logger.info(f"[Voice] System prompt: {system_prompt[:200]}...")
         
-        await stream_manager.initialize_stream(system_prompt)
+        try:
+            await stream_manager.initialize_stream(system_prompt)
+            logger.info("[Voice] ✅ Stream manager initialized")
+        except Exception as stream_error:
+            logger.error(f"[Voice] ❌ Failed to initialize stream: {stream_error}", exc_info=True)
+            await websocket.send_json({"type": "error", "message": f"Failed to initialize Nova Sonic: {str(stream_error)}"})
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+            return
         
         # Send ready signal
-        await websocket.send_json({"type": "ready", "message": "Voice agent ready"})
+        logger.info("[Voice] 📤 Sending 'ready' signal to frontend...")
+        try:
+            await websocket.send_json({"type": "ready", "message": "Voice agent ready"})
+            logger.info("[Voice] ✅ Ready signal sent")
+        except Exception as send_error:
+            logger.error(f"[Voice] ❌ Failed to send ready signal: {send_error}", exc_info=True)
+            return
         
         # Send audio content start
-        await stream_manager.send_audio_content_start_event()
+        try:
+            await stream_manager.send_audio_content_start_event()
+            logger.info("[Voice] ✅ Audio content start event sent")
+        except Exception as audio_error:
+            logger.error(f"[Voice] ❌ Failed to send audio start event: {audio_error}", exc_info=True)
         
         # Step 4: WebSocket message loop
+        logger.info("[Voice] 📡 Entering message loop...")
+        message_count = 0
         while True:
             message = await websocket.receive_json()
+            message_count += 1
             
             msg_type = message.get("type")
             
@@ -621,24 +733,28 @@ async def voice_agent_websocket(
                 if audio_b64:
                     audio_bytes = base64.b64decode(audio_b64)
                     stream_manager.add_audio_chunk(audio_bytes)
+                    if message_count % 10 == 0:  # Log every 10th message to avoid spam
+                        logger.debug(f"[Voice] 🎤 Received audio chunk #{message_count}: {len(audio_bytes)} bytes")
             
             elif msg_type == "end":
                 # Client ending session
-                logger.info("[Voice] Client requested session end")
+                logger.info(f"[Voice] Client requested session end (processed {message_count} messages)")
                 break
             
             else:
                 logger.warning(f"[Voice] Unknown message type: {msg_type}")
     
-    except WebSocketDisconnect:
-        logger.info("[Voice] WebSocket disconnected")
+    except WebSocketDisconnect as e:
+        logger.info(f"[Voice] WebSocket disconnected: {e}")
     
     except Exception as e:
-        logger.error(f"[Voice] Error: {e}", exc_info=True)
+        logger.error(f"[Voice] ❌ CRITICAL ERROR: {e}", exc_info=True)
+        logger.error(f"[Voice] Error type: {type(e).__name__}")
+        logger.error(f"[Voice] Error details: {str(e)}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
-        except:
-            pass
+        except Exception as send_err:
+            logger.error(f"[Voice] Failed to send error to client: {send_err}")
     
     finally:
         # Cleanup
@@ -656,5 +772,6 @@ async def voice_agent_websocket(
 @router.get("/health")
 async def voice_health():
     """Voice service health check"""
-    return {"status": "healthy", "service": "voice"}
+    logger.info("[Voice] Health check called")
+    return {"status": "healthy", "service": "voice", "websocket_route": "/api/v1/voice/{agent_id}/{actor_id}/{session_id}"}
 

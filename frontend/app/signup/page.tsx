@@ -20,6 +20,9 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+  const [showVerification, setShowVerification] = useState(false)
+  const [verificationCode, setVerificationCode] = useState("")
+  const [isVerifying, setIsVerifying] = useState(false)
   
   const { register } = useAuth()
   const router = useRouter()
@@ -51,13 +54,58 @@ export default function SignupPage() {
       })
       
       setSuccess(result.message)
+      setShowVerification(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVerification = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError("")
+    setSuccess("")
+    
+    if (!verificationCode || verificationCode.length !== 6) {
+      setError("Please enter a valid 6-digit verification code")
+      return
+    }
+    
+    setIsVerifying(true)
+    
+    try {
+      const { confirmRegistration } = await import("@/lib/api/auth")
+      await confirmRegistration(email, verificationCode)
+      
+      setSuccess("Email verified successfully! Redirecting to login...")
       
       // Redirect to login after 2 seconds
       setTimeout(() => {
         router.push('/login')
       }, 2000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed. Please try again.")
+      setError(err instanceof Error ? err.message : "Verification failed. Please try again.")
+    } finally {
+      setIsVerifying(false)
+    }
+  }
+
+  const handleResendCode = async () => {
+    setError("")
+    setSuccess("")
+    setIsLoading(true)
+    
+    try {
+      // Re-register to resend the code
+      const result = await register({
+        email,
+        password,
+        name,
+      })
+      setSuccess("Verification code resent! Check your email.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resend code.")
     } finally {
       setIsLoading(false)
     }
@@ -93,10 +141,17 @@ export default function SignupPage() {
         {/* Signup Card */}
         <div className="bg-card border border-border rounded-lg p-8">
           <div className="mb-6">
-            <h1 className="text-2xl font-bold mb-2">Create an account</h1>
-            <p className="text-muted-foreground">Get started with Oratio today</p>
+            <h1 className="text-2xl font-bold mb-2">
+              {showVerification ? "Verify your email" : "Create an account"}
+            </h1>
+            <p className="text-muted-foreground">
+              {showVerification 
+                ? `We sent a verification code to ${email}` 
+                : "Get started with Oratio today"}
+            </p>
           </div>
 
+          {!showVerification ? (
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
@@ -184,6 +239,71 @@ export default function SignupPage() {
               )}
             </Button>
           </form>
+          ) : (
+          <form onSubmit={handleVerification} className="space-y-4">
+            {error && (
+              <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                {error}
+              </div>
+            )}
+            
+            {success && (
+              <div className="bg-green-500/10 text-green-600 text-sm p-3 rounded-md">
+                {success}
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="verificationCode">Verification Code</Label>
+              <Input
+                id="verificationCode"
+                type="text"
+                placeholder="Enter 6-digit code"
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                required
+                disabled={isVerifying}
+                className="bg-background text-center text-2xl tracking-widest"
+                maxLength={6}
+              />
+              <p className="text-xs text-muted-foreground text-center">
+                Check your email for the verification code
+              </p>
+            </div>
+
+            <Button 
+              type="submit" 
+              className="w-full bg-accent hover:bg-accent/90"
+              disabled={isVerifying || verificationCode.length !== 6}
+            >
+              {isVerifying ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Verify Email"
+              )}
+            </Button>
+
+            <Button 
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleResendCode}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Resending...
+                </>
+              ) : (
+                "Resend Code"
+              )}
+            </Button>
+          </form>
+          )}
 
           <div className="mt-6 text-center text-sm">
             <span className="text-muted-foreground">Already have an account? </span>

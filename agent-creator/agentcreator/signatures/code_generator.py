@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 def product_inquiry_agent(query: str) -> str:
     \"\"\"Handle product inquiries.\"\"\"
     agent = Agent(
-        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro
+        model="amazon.nova-pro-v1:0",  # Use Nova Pro
         system_prompt="You are a product expert. Use retrieve tool to answer questions.",
         tools=[retrieve]
     )
@@ -71,7 +71,7 @@ def product_inquiry_agent(query: str) -> str:
 def order_tracking_agent(query: str) -> str:
     \"\"\"Handle order tracking.\"\"\"
     agent = Agent(
-        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro
+        model="amazon.nova-pro-v1:0",  # Use Nova Pro
         system_prompt="You track orders. Use retrieve tool for order info.",
         tools=[retrieve]
     )
@@ -81,7 +81,7 @@ def order_tracking_agent(query: str) -> str:
 def returns_processing_agent(query: str) -> str:
     \"\"\"Handle returns processing.\"\"\"
     agent = Agent(
-        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro
+        model="amazon.nova-pro-v1:0",  # Use Nova Pro
         system_prompt="You process returns. Use retrieve tool for returns info.",
         tools=[retrieve]
     )

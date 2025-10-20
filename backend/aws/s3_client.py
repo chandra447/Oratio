@@ -23,9 +23,10 @@ class S3Client:
         agent_id: str,
         resource_type: str = "knowledge-base",
         content_type: Optional[str] = None,
+        add_tags: bool = True,
     ) -> bool:
         """
-        Upload a file to S3 with proper tagging
+        Upload a file to S3 with optional tagging
 
         Args:
             file_obj: File object to upload
@@ -35,23 +36,27 @@ class S3Client:
             agent_id: Agent ID for tagging
             resource_type: Type of resource (knowledge-base, generated-code, recording)
             content_type: Content type of the file
+            add_tags: Whether to add S3 object tags (set to False for Bedrock KB files)
 
         Returns:
             bool: True if successful, False otherwise
         """
         try:
-            # Prepare tags
-            tags = f"userId={user_id}&agentId={agent_id}&resourceType={resource_type}"
-
             # Prepare extra args
-            extra_args = {"Tagging": tags}
+            extra_args = {}
+            
+            # Only add tags if requested (not for Bedrock KB files to avoid metadata size limits)
+            if add_tags:
+                tags = f"userId={user_id}&agentId={agent_id}&resourceType={resource_type}"
+                extra_args["Tagging"] = tags
+                
             if content_type:
                 extra_args["ContentType"] = content_type
 
             # Upload file
-            self.s3_client.upload_fileobj(file_obj, bucket, key, ExtraArgs=extra_args)
+            self.s3_client.upload_fileobj(file_obj, bucket, key, ExtraArgs=extra_args if extra_args else None)
 
-            logger.info(f"Successfully uploaded file to s3://{bucket}/{key} with tags: {tags}")
+            logger.info(f"Successfully uploaded file to s3://{bucket}/{key}")
             return True
 
         except ClientError as e:

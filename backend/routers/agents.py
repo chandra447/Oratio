@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 from typing import List, Optional
@@ -19,7 +20,7 @@ from services.s3_service import S3Service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/agents", tags=["agents"])
+router = APIRouter(prefix="/agents", tags=["agents"])
 
 # Initialize clients and services
 dynamodb_client = DynamoDBClient()
@@ -33,8 +34,10 @@ s3_service = S3Service(s3_client)
 # Get environment variables
 from config import settings
 
-STATE_MACHINE_ARN = settings.AGENT_CREATION_STATE_MACHINE_ARN or os.getenv(
-    "STATE_MACHINE_ARN", "arn:aws:states:us-east-1:123456789012:stateMachine:oratio-agent-creation"
+# For hackathon: hardcoded ARN (TODO: move to environment variable for production)
+STATE_MACHINE_ARN = os.getenv(
+    "STATE_MACHINE_ARN", 
+    "arn:aws:states:us-east-1:095811638868:stateMachine:oratio-agent-creation"  # Your actual ARN
 )
 
 
@@ -87,10 +90,14 @@ async def create_agent(
 
         # Generate IDs
         agent_id = str(uuid4())
-        kb_id = str(uuid4())
         user_id = current_user.user_id
-
-        logger.info(f"Creating agent {agent_id} for user {user_id}")
+        
+        # Generate deterministic knowledge base ID from agent_id + user_id
+        # This ensures consistency and makes it easy to derive KB ID from agent ID
+        kb_hash = hashlib.sha256(f"{agent_id}:{user_id}".encode()).hexdigest()
+        kb_id = f"kb-{kb_hash[:32]}"  # Use first 32 chars of hash for reasonable length
+        
+        logger.info(f"Creating agent {agent_id} for user {user_id} with KB {kb_id}")
 
         # Step 1: Upload files to S3
         file_upload_data = []
@@ -129,17 +136,12 @@ async def create_agent(
             folder_file_descriptions=folder_structure,
         )
 
-        kb = kb_service.create_knowledge_base(kb_data)
+        kb = kb_service.create_knowledge_base(kb_data, kb_id=kb_id)
         if not kb:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create knowledge base entry",
             )
-
-        # Override the generated ID with our pre-generated one
-        kb.knowledge_base_id = kb_id
-        # Update in DynamoDB with correct ID
-        kb_service.dynamodb.put_item("oratio-knowledgebases", kb.model_dump())
 
         logger.info(f"Created knowledge base {kb_id}")
 
@@ -156,18 +158,13 @@ async def create_agent(
         )
 
         agent = agent_service.create_agent(
-            user_id=user_id, kb_id=kb_id, agent_data=agent_create_data
+            user_id=user_id, kb_id=kb_id, agent_data=agent_create_data, agent_id=agent_id
         )
         if not agent:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to create agent entry",
             )
-
-        # Override the generated ID with our pre-generated one
-        agent.agent_id = agent_id
-        # Update in DynamoDB with correct ID
-        agent_service.dynamodb.put_item("oratio-agents", agent.model_dump())
 
         logger.info(f"Created agent {agent_id}")
 
@@ -189,15 +186,11 @@ async def create_agent(
             input_data=workflow_input,
         )
 
-        if not execution:
-            logger.error("Failed to start Step Functions execution")
-            # Don't fail the request, agent is created, workflow will be retried
-            # raise HTTPException(
-            #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            #     detail="Failed to start agent creation workflow",
-            # )
-
-        logger.info(f"Started Step Functions execution: {execution.get('executionArn')}")
+        if execution:
+            logger.info(f"Started Step Functions execution: {execution.get('executionArn')}")
+        else:
+            logger.warning("Failed to start Step Functions execution - agent created but workflow not triggered")
+            # Don't fail the request, agent is created, workflow can be triggered manually or retried
 
         # Return agent response
         response = AgentResponse(
@@ -213,15 +206,14 @@ async def create_agent(
             voice_config=agent.voice_config,
             text_config=agent.text_config,
             bedrock_knowledge_base_arn=agent.bedrock_knowledge_base_arn,
-            agentcore_agent_id=agent.agentcore_agent_id,
-            agentcore_agent_arn=agent.agentcore_agent_arn,
+            agentcore_runtime_arn=agent.agentcore_runtime_arn,
             generated_prompt=agent.generated_prompt,
+            voice_prompt=agent.voice_prompt,
             agent_code_s3_path=agent.agent_code_s3_path,
+            memory_id=agent.memory_id,
             status=agent.status,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
-            websocket_url=agent.websocket_url,
-            api_endpoint=agent.api_endpoint,
             knowledge_base=kb.model_dump(),
         )
 
@@ -282,15 +274,14 @@ async def list_agents(
                 voice_config=agent.voice_config,
                 text_config=agent.text_config,
                 bedrock_knowledge_base_arn=agent.bedrock_knowledge_base_arn,
-                agentcore_agent_id=agent.agentcore_agent_id,
-                agentcore_agent_arn=agent.agentcore_agent_arn,
+                agentcore_runtime_arn=agent.agentcore_runtime_arn,
                 generated_prompt=agent.generated_prompt,
+                voice_prompt=agent.voice_prompt,
                 agent_code_s3_path=agent.agent_code_s3_path,
+                memory_id=agent.memory_id,
                 status=agent.status,
                 created_at=agent.created_at,
                 updated_at=agent.updated_at,
-                websocket_url=agent.websocket_url,
-                api_endpoint=agent.api_endpoint,
                 knowledge_base=kb.model_dump() if kb else None,
             )
             responses.append(response)
@@ -342,15 +333,14 @@ async def get_agent(
             voice_config=agent.voice_config,
             text_config=agent.text_config,
             bedrock_knowledge_base_arn=agent.bedrock_knowledge_base_arn,
-            agentcore_agent_id=agent.agentcore_agent_id,
-            agentcore_agent_arn=agent.agentcore_agent_arn,
+            agentcore_runtime_arn=agent.agentcore_runtime_arn,
             generated_prompt=agent.generated_prompt,
+            voice_prompt=agent.voice_prompt,
             agent_code_s3_path=agent.agent_code_s3_path,
+            memory_id=agent.memory_id,
             status=agent.status,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
-            websocket_url=agent.websocket_url,
-            api_endpoint=agent.api_endpoint,
             knowledge_base=kb.model_dump() if kb else None,
         )
 

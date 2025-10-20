@@ -46,6 +46,10 @@ export default function CreateAgentPage() {
   const [humanInLoopScenarios, setHumanInLoopScenarios] = useState("")
   const [fileTree, setFileTree] = useState<TreeNodeData[]>([])
   const [selectedMode, setSelectedMode] = useState<"voice" | "conversational" | null>(null)
+  const [voicePersonality, setVoicePersonality] = useState("")
+  const [showVoicePersonality, setShowVoicePersonality] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
 
   const steps: { id: Step; label: string }[] = [
@@ -225,18 +229,79 @@ export default function CreateAgentPage() {
     }
   }
 
-  const handleCreate = () => {
-    // Here you would submit the data to your backend
-    console.log({
-      agentName,
-      agentDescription,
-      sop,
-      humanInLoop,
-      humanInLoopScenarios,
-      fileTree,
-      selectedMode,
-    })
-    router.push("/dashboard/agents")
+  const collectAllFiles = (nodes: TreeNodeData[]): File[] => {
+    const files: File[] = []
+    const traverse = (nodeList: TreeNodeData[]) => {
+      for (const node of nodeList) {
+        if (node.type === "file" && node.file) {
+          files.push(node.file)
+        }
+        if (node.children) {
+          traverse(node.children)
+        }
+      }
+    }
+    traverse(nodes)
+    return files
+  }
+
+  const collectFileDescriptions = (nodes: TreeNodeData[]): Record<string, string> => {
+    const descriptions: Record<string, string> = {}
+    const traverse = (nodeList: TreeNodeData[]) => {
+      for (const node of nodeList) {
+        if (node.type === "file") {
+          descriptions[node.path] = node.description || ""
+        }
+        if (node.children) {
+          traverse(node.children)
+        }
+      }
+    }
+    traverse(nodes)
+    return descriptions
+  }
+
+  const handleCreate = async () => {
+    if (!selectedMode) return
+
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const { createAgent } = await import("@/lib/api/agents")
+      
+      // Collect all files from tree
+      const files = collectAllFiles(fileTree)
+      const fileDescriptions = collectFileDescriptions(fileTree)
+
+      // Build agent data
+      const agentData = {
+        agent_name: agentName,
+        agent_type: (selectedMode === "voice" ? "voice" : "text") as "voice" | "text",
+        sop: sop,
+        knowledge_base_description: agentDescription,
+        human_handoff_description: humanInLoopScenarios || "N/A",
+        files: files,
+        file_descriptions: fileDescriptions,
+      }
+
+      // Add voice personality if voice mode and provided
+      if (selectedMode === "voice" && voicePersonality.trim()) {
+        agentData.voice_personality = {
+          additional_instructions: voicePersonality,
+        }
+      }
+
+      // Create agent
+      const createdAgent = await createAgent(agentData)
+      
+      // Redirect to agents list
+      router.push("/dashboard/agents")
+    } catch (err: any) {
+      console.error("Error creating agent:", err)
+      setError(err.message || "Failed to create agent. Please try again.")
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -413,50 +478,121 @@ export default function CreateAgentPage() {
             )}
 
             {currentStep === "mode" && (
-              <Card className="bg-neutral-900 border-neutral-800 p-6">
-                <h2 className="text-xl font-semibold text-white mb-2">Select Agent Mode</h2>
-                <p className="text-neutral-400 text-sm mb-6">Choose how your agent will interact with users.</p>
+              <div className="space-y-6">
+                <Card className="bg-neutral-900 border-neutral-800 p-6">
+                  <h2 className="text-xl font-semibold text-white mb-2">Select Agent Mode</h2>
+                  <p className="text-neutral-400 text-sm mb-6">Choose how your agent will interact with users.</p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Voice Mode */}
-                  <button
-                    onClick={() => setSelectedMode("voice")}
-                    className={cn(
-                      "p-8 rounded-lg border-2 transition-all text-left",
-                      selectedMode === "voice"
-                        ? "border-accent bg-accent/10"
-                        : "border-neutral-700 hover:border-neutral-600",
-                    )}
-                  >
-                    <div className="flex items-center justify-center h-16 w-16 rounded-full bg-neutral-800 mb-4">
-                      <IconMicrophone className="h-8 w-8 text-accent" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Voice Mode</h3>
-                    <p className="text-neutral-400 text-sm">
-                      Real-time voice conversations using AWS Nova Sonic for natural speech interactions.
-                    </p>
-                  </button>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Voice Mode */}
+                    <button
+                      onClick={() => {
+                        setSelectedMode("voice")
+                        setShowVoicePersonality(true)
+                      }}
+                      className={cn(
+                        "p-8 rounded-lg border-2 transition-all text-left",
+                        selectedMode === "voice"
+                          ? "border-accent bg-accent/10"
+                          : "border-neutral-700 hover:border-neutral-600",
+                      )}
+                    >
+                      <div className="flex items-center justify-center h-16 w-16 rounded-full bg-neutral-800 mb-4">
+                        <IconMicrophone className="h-8 w-8 text-accent" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-white mb-2">Voice Mode</h3>
+                      <p className="text-neutral-400 text-sm">
+                        Real-time voice conversations using AWS Nova Sonic for natural speech interactions.
+                      </p>
+                    </button>
 
-                  {/* Conversational Mode */}
-                  <button
-                    onClick={() => setSelectedMode("conversational")}
-                    className={cn(
-                      "p-8 rounded-lg border-2 transition-all text-left",
-                      selectedMode === "conversational"
-                        ? "border-accent bg-accent/10"
-                        : "border-neutral-700 hover:border-neutral-600",
-                    )}
-                  >
-                    <div className="flex items-center justify-center h-16 w-16 rounded-full bg-neutral-800 mb-4">
-                      <IconMessage className="h-8 w-8 text-accent" />
+                    {/* Conversational Mode */}
+                    <button
+                      onClick={() => {
+                        setSelectedMode("conversational")
+                        setShowVoicePersonality(false)
+                      }}
+                      className={cn(
+                        "p-8 rounded-lg border-2 transition-all text-left",
+                        selectedMode === "conversational"
+                          ? "border-accent bg-accent/10"
+                          : "border-neutral-700 hover:border-neutral-600",
+                      )}
+                    >
+                      <div className="flex items-center justify-center h-16 w-16 rounded-full bg-neutral-800 mb-4">
+                        <IconMessage className="h-8 w-8 text-accent" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-white mb-2">Conversational Mode</h3>
+                      <p className="text-neutral-400 text-sm">
+                        Text-based conversations powered by Claude for intelligent chat interactions.
+                      </p>
+                    </button>
+                  </div>
+                </Card>
+
+                {/* Voice Personality Section - Collapsible */}
+                {selectedMode === "voice" && showVoicePersonality && (
+                  <Card className="bg-neutral-900 border-neutral-800 p-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-white">Voice Personality (Optional)</h3>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowVoicePersonality(false)}
+                        className="text-neutral-400 hover:text-white"
+                      >
+                        <IconX className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <h3 className="text-lg font-semibold text-white mb-2">Conversational Mode</h3>
-                    <p className="text-neutral-400 text-sm">
-                      Text-based conversations powered by Claude for intelligent chat interactions.
+                    <p className="text-neutral-400 text-sm mb-4">
+                      Define how your voice agent should sound and behave during conversations.
                     </p>
-                  </button>
-                </div>
-              </Card>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="voice-personality" className="text-white mb-2">
+                          Personality Instructions
+                        </Label>
+                        <Textarea
+                          id="voice-personality"
+                          placeholder="Describe the voice personality..."
+                          value={voicePersonality}
+                          onChange={(e) => setVoicePersonality(e.target.value)}
+                          rows={6}
+                          className="bg-neutral-950 border-neutral-800 text-white resize-y"
+                        />
+                      </div>
+                      
+                      {/* Example */}
+                      <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-4">
+                        <p className="text-xs font-semibold text-accent mb-2">Example:</p>
+                        <p className="text-xs text-neutral-400 leading-relaxed">
+                          "You are Sarah, a friendly and empathetic customer service representative. Speak in a warm, 
+                          conversational tone with moderate pacing. Use occasional filler words like 'um' to sound natural. 
+                          Be patient and understanding when customers are frustrated."
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {!showVoicePersonality && selectedMode === "voice" && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowVoicePersonality(true)}
+                    className="w-full border-neutral-700 text-white hover:bg-neutral-800 bg-transparent"
+                  >
+                    Add Voice Personality
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {/* Error Display */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mt-6">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
             )}
 
             {/* Navigation Buttons */}
@@ -464,7 +600,7 @@ export default function CreateAgentPage() {
               <Button
                 variant="outline"
                 onClick={handleBack}
-                disabled={currentStep === "description"}
+                disabled={currentStep === "description" || isSubmitting}
                 className="border-neutral-700 text-white hover:bg-neutral-800 bg-transparent"
               >
                 Back
@@ -472,10 +608,10 @@ export default function CreateAgentPage() {
               {currentStep === "mode" ? (
                 <Button
                   onClick={handleCreate}
-                  disabled={!canProceed()}
+                  disabled={!canProceed() || isSubmitting}
                   className="bg-accent hover:bg-accent/90 text-white"
                 >
-                  Create Agent
+                  {isSubmitting ? "Creating..." : "Create Agent"}
                 </Button>
               ) : (
                 <Button

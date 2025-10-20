@@ -7,9 +7,9 @@ from typing import Optional, Dict, Any
 import logging
 from botocore.exceptions import ClientError
 
-from backend.aws.cognito_client import CognitoClient
-from backend.models.user import User, UserCreate, UserLogin, TokenResponse, UserProfile
-from backend.utils.jwt_utils import jwt_validator
+from aws.cognito_client import CognitoClient
+from models.user import User, UserCreate, UserLogin, TokenResponse, UserProfile
+from utils.jwt_utils import jwt_validator
 
 logger = logging.getLogger(__name__)
 

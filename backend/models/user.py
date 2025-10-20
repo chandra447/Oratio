@@ -25,6 +25,13 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserConfirm(BaseModel):
+    """Model for email confirmation."""
+    
+    email: EmailStr
+    confirmation_code: str = Field(..., min_length=6, max_length=6)
+
+
 class User(UserBase):
     """Complete user model with all fields."""
     

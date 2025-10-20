@@ -10,15 +10,21 @@ dependencies = [
     "python-multipart>=0.0.20",
     "boto3>=1.35.94",
     "botocore>=1.35.94",
-    "aws-sdk-bedrock-runtime>=0.1.0",  # Nova Sonic bidirectional streaming
-    "smithy-aws-core>=0.1.0",  # AWS Smithy Python SDK
+    "aws-sdk-bedrock-runtime>=0.1.0", # Nova Sonic bidirectional streaming
+    "smithy-aws-core>=0.0.1", # AWS Smithy Python SDK
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
     "python-dotenv>=1.0.1",
     "pydantic[email]>=2.10.5",
     "pydantic-settings>=2.7.1",
     "websockets>=14.1",
-    "reactivex>=4.0.4",  # RxPy for streaming
+    "reactivex>=4.0.4", # RxPy for streaming
+    "httpx>=0.28.1",
+    "smithy-aws-event-stream>=0.1.0",
+    "anyio>=4.11.0",
+    "smithy-http>=0.1.0",
+    "aiohttp>=3.13.1",
+    "pyaudio>=0.2.14",
 ]
 
 [project.optional-dependencies]

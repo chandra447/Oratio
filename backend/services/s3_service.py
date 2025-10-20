@@ -37,7 +37,7 @@ class S3Service:
             # Construct S3 key
             s3_key = f"{base_path}/{filename}"
 
-            # Upload file with tags
+            # Upload file WITHOUT tags for Bedrock KB (to avoid metadata size limits)
             success = self.s3.upload_file(
                 file_obj=file_obj,
                 bucket=self.kb_bucket,
@@ -46,6 +46,7 @@ class S3Service:
                 agent_id=agent_id,
                 resource_type="knowledge-base",
                 content_type=content_type,
+                add_tags=False,  # Disable tags for Bedrock KB files
             )
 
             results[filename] = success

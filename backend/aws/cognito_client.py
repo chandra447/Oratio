@@ -5,6 +5,9 @@ import boto3
 from botocore.exceptions import ClientError
 from typing import Dict, Optional, Any
 import logging
+import hmac
+import hashlib
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +20,7 @@ class CognitoClient:
         cognito_client: Optional[Any] = None,
         user_pool_id: Optional[str] = None,
         client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
         region: Optional[str] = None
     ):
         """
@@ -26,6 +30,7 @@ class CognitoClient:
             cognito_client: Optional boto3 cognito-idp client (for testing/DI)
             user_pool_id: Cognito User Pool ID (defaults to env var)
             client_id: Cognito Client ID (defaults to env var)
+            client_secret: Cognito Client Secret (optional, defaults to env var)
             region: AWS region (defaults to env var)
         """
         self.client = cognito_client or boto3.client(
@@ -34,9 +39,31 @@ class CognitoClient:
         )
         self.user_pool_id = user_pool_id or os.getenv('COGNITO_USER_POOL_ID')
         self.client_id = client_id or os.getenv('COGNITO_CLIENT_ID')
+        self.client_secret = client_secret or os.getenv('COGNITO_CLIENT_SECRET')
         
         if not self.user_pool_id or not self.client_id:
             raise ValueError("COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID must be set")
+    
+    def _get_secret_hash(self, username: str) -> str:
+        """
+        Calculate SECRET_HASH for Cognito requests when client secret is present.
+        
+        Args:
+            username: Username/email
+            
+        Returns:
+            Base64 encoded HMAC-SHA256 hash
+        """
+        if not self.client_secret:
+            return None
+            
+        message = bytes(f'{username}{self.client_id}', 'utf-8')
+        key = bytes(self.client_secret, 'utf-8')
+        secret_hash = base64.b64encode(
+            hmac.new(key, message, digestmod=hashlib.sha256).digest()
+        ).decode()
+        
+        return secret_hash
     
     def sign_up(self, email: str, password: str, name: str) -> Dict:
         """
@@ -54,15 +81,22 @@ class CognitoClient:
             ClientError: If registration fails
         """
         try:
-            response = self.client.sign_up(
-                ClientId=self.client_id,
-                Username=email,
-                Password=password,
-                UserAttributes=[
+            params = {
+                'ClientId': self.client_id,
+                'Username': email,
+                'Password': password,
+                'UserAttributes': [
                     {'Name': 'email', 'Value': email},
                     {'Name': 'name', 'Value': name}
                 ]
-            )
+            }
+            
+            # Add SECRET_HASH if client secret is configured
+            secret_hash = self._get_secret_hash(email)
+            if secret_hash:
+                params['SecretHash'] = secret_hash
+            
+            response = self.client.sign_up(**params)
             
             logger.info(f"User registered successfully: {email}")
             return {
@@ -90,11 +124,18 @@ class CognitoClient:
             ClientError: If confirmation fails
         """
         try:
-            self.client.confirm_sign_up(
-                ClientId=self.client_id,
-                Username=email,
-                ConfirmationCode=confirmation_code
-            )
+            params = {
+                'ClientId': self.client_id,
+                'Username': email,
+                'ConfirmationCode': confirmation_code
+            }
+            
+            # Add SECRET_HASH if client secret is configured
+            secret_hash = self._get_secret_hash(email)
+            if secret_hash:
+                params['SecretHash'] = secret_hash
+            
+            self.client.confirm_sign_up(**params)
             logger.info(f"User confirmed successfully: {email}")
             return True
             
@@ -117,13 +158,20 @@ class CognitoClient:
             ClientError: If authentication fails
         """
         try:
+            auth_params = {
+                'USERNAME': email,
+                'PASSWORD': password
+            }
+            
+            # Add SECRET_HASH if client secret is configured
+            secret_hash = self._get_secret_hash(email)
+            if secret_hash:
+                auth_params['SECRET_HASH'] = secret_hash
+            
             response = self.client.initiate_auth(
                 ClientId=self.client_id,
                 AuthFlow='USER_PASSWORD_AUTH',
-                AuthParameters={
-                    'USERNAME': email,
-                    'PASSWORD': password
-                }
+                AuthParameters=auth_params
             )
             
             auth_result = response['AuthenticationResult']

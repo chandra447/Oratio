@@ -17,7 +17,7 @@ class AgentService:
         self.table_name = table_name
 
     def create_agent(
-        self, user_id: str, kb_id: str, agent_data: AgentCreate
+        self, user_id: str, kb_id: str, agent_data: AgentCreate, agent_id: Optional[str] = None
     ) -> Optional[Agent]:
         """
         Create a new agent entry in DynamoDB
@@ -26,13 +26,15 @@ class AgentService:
             user_id: User ID
             kb_id: Knowledge base ID
             agent_data: Agent creation data
+            agent_id: Optional pre-generated agent ID (if None, generates new UUID)
 
         Returns:
             Optional[Agent]: Created agent or None if failed
         """
         try:
-            # Generate unique ID
-            agent_id = str(uuid4())
+            # Use provided ID or generate unique ID
+            if agent_id is None:
+                agent_id = str(uuid4())
 
             # Create agent object
             agent = Agent(
@@ -44,6 +46,7 @@ class AgentService:
                 knowledge_base_id=kb_id,
                 knowledge_base_description=agent_data.knowledge_base_description,
                 human_handoff_description=agent_data.human_handoff_description,
+                voice_personality=agent_data.voice_personality,
                 voice_config=agent_data.voice_config,
                 text_config=agent_data.text_config,
                 status=AgentStatus.CREATING,
@@ -51,8 +54,8 @@ class AgentService:
                 updated_at=int(datetime.now().timestamp()),
             )
 
-            # Convert to dict for DynamoDB
-            item = agent.model_dump()
+            # Convert to dict for DynamoDB (use aliases for camelCase keys)
+            item = agent.model_dump(by_alias=True)
 
             # Put item in DynamoDB
             success = self.dynamodb.put_item(self.table_name, item)

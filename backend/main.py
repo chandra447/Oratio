@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from backend.routers import agents, auth, chat, voice
+from routers import agents, auth, chat
+from routers import voice_simple as voice  # Use simplified voice implementation
 
 app = FastAPI(
     title="Oratio API",
@@ -22,7 +23,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(agents.router, prefix=settings.API_V1_PREFIX)
 app.include_router(chat.router, prefix=settings.API_V1_PREFIX)
-app.include_router(voice.router, prefix=settings.API_V1_PREFIX)  # Voice WebSocket
+app.include_router(voice.router, prefix=settings.API_V1_PREFIX)  # Voice WebSocket (simplified)
 
 
 @app.get("/")
