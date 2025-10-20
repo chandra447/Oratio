@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from routers import agents, auth, chat
+from routers import agents, auth, chat, api_keys, knowledge_bases
 from routers import voice_simple as voice  # Use simplified voice implementation
 
 app = FastAPI(
@@ -22,6 +22,8 @@ app.add_middleware(
 # Include routers
 app.include_router(auth.router, prefix=settings.API_V1_PREFIX)
 app.include_router(agents.router, prefix=settings.API_V1_PREFIX)
+app.include_router(api_keys.router, prefix=settings.API_V1_PREFIX)
+app.include_router(knowledge_bases.router, prefix=settings.API_V1_PREFIX)
 app.include_router(chat.router, prefix=settings.API_V1_PREFIX)
 app.include_router(voice.router, prefix=settings.API_V1_PREFIX)  # Voice WebSocket (simplified)
 

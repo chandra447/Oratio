@@ -29,6 +29,7 @@ env:
   AWS_REGION: us-east-1
   ECR_AGENTCREATOR_REPO: oratio-agentcreator
   ECR_BACKEND_REPO: oratio-backend
+  ECR_FRONTEND_REPO: oratio-frontend
   ECR_CHAMELEON_REPO: oratio-chameleon
 
 jobs:
@@ -55,6 +56,8 @@ jobs:
               - 'agent-creator/**'
             backend:
               - 'backend/**'
+            frontend:
+              - 'frontend/**'
             chameleon:
               - 'agent-creator/chameleon/**'
             infrastructure:
@@ -107,6 +110,7 @@ jobs:
         run: |
           .github/scripts/create-ecr-repo.sh ${{ env.ECR_AGENTCREATOR_REPO }} ${{ env.AWS_REGION }}
           .github/scripts/create-ecr-repo.sh ${{ env.ECR_BACKEND_REPO }} ${{ env.AWS_REGION }}
+          .github/scripts/create-ecr-repo.sh ${{ env.ECR_FRONTEND_REPO }} ${{ env.AWS_REGION }}
           # Chameleon ECR repo is auto-created by starter toolkit
           echo "✓ ECR repositories ready"
       
@@ -158,6 +162,31 @@ jobs:
           else
             echo "BACKEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_BACKEND_REPO }}:latest" >> $GITHUB_ENV
             echo "⏭️  Backend unchanged, using latest image"
+          fi
+
+      # Step 5b: Build and push Frontend image (ARM64)
+      - name: Build and push Frontend image
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.infrastructure == 'true' || inputs.force_docker_build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.prod
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set Frontend image URI
+        run: |
+          if [ "${{ steps.changes.outputs.frontend }}" == "true" ] || [ "${{ inputs.force_docker_build }}" == "true" ]; then
+            echo "FRONTEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:${{ github.sha }}" >> $GITHUB_ENV
+            echo "✓ Frontend image pushed: ${{ github.sha }}"
+          else
+            echo "FRONTEND_IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:latest" >> $GITHUB_ENV
+            echo "⏭️  Frontend unchanged, using latest image"
           fi
       
       # Step 6: Chameleon will be deployed using starter toolkit (no Docker build needed)

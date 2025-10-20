@@ -1,85 +1,92 @@
 "use client"
 import type React from "react"
-import { useState } from "react"
-import { Sidebar, SidebarBody, SidebarLink } from "@/components/ui/sidebar"
-import { IconRobot, IconDatabase, IconKey, IconLogout, IconMicrophone } from "@tabler/icons-react"
-import { motion } from "framer-motion"
+import { IconRobot, IconDatabase, IconKey, IconLogout, IconMicrophone, IconSparkles } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const pathname = usePathname()
+  
   const links = [
     {
       label: "Agents",
       href: "/dashboard/agents",
-      icon: <IconRobot className="h-5 w-5 shrink-0 text-neutral-200" />,
+      icon: IconRobot,
     },
     {
       label: "Knowledge Base",
       href: "/dashboard/knowledge-base",
-      icon: <IconDatabase className="h-5 w-5 shrink-0 text-neutral-200" />,
+      icon: IconDatabase,
     },
     {
       label: "API Keys",
       href: "/dashboard/api-keys",
-      icon: <IconKey className="h-5 w-5 shrink-0 text-neutral-200" />,
+      icon: IconKey,
     },
     {
       label: "Logout",
       href: "/",
-      icon: <IconLogout className="h-5 w-5 shrink-0 text-neutral-200" />,
+      icon: IconLogout,
     },
   ]
-  const [open, setOpen] = useState(false)
+
+  const isActive = (href: string) => {
+    if (href === "/dashboard/agents") {
+      return pathname.startsWith("/dashboard/agents")
+    }
+    return pathname === href
+  }
 
   return (
-    <div className={cn("flex w-full h-screen overflow-hidden bg-black")}>
-      <Sidebar open={open} setOpen={setOpen}>
-        <SidebarBody className="justify-between gap-10">
-          <div className="flex flex-1 flex-col overflow-x-hidden overflow-y-auto">
-            {open ? <Logo /> : <LogoIcon />}
-            <div className="mt-8 flex flex-col gap-2">
-              {links.map((link, idx) => (
-                <SidebarLink key={idx} link={link} />
-              ))}
-            </div>
+    <div className="flex w-full h-screen overflow-hidden bg-neutral-950">
+      {/* Compact Sidebar */}
+      <aside className="w-16 bg-neutral-900/50 border-r border-neutral-800/50 flex flex-col items-center py-6 gap-6 shrink-0 relative z-10">
+        {/* Logo */}
+        <Link href="/dashboard/agents" className="group">
+          <div className="h-10 w-10 shrink-0 rounded-xl bg-accent flex items-center justify-center relative transition-transform hover:scale-105">
+            <IconMicrophone className="h-5 w-5 text-white relative z-10" />
+            <IconSparkles className="h-3 w-3 text-white/80 absolute -top-0.5 -right-0.5" />
           </div>
-        </SidebarBody>
-      </Sidebar>
-      <div className="flex flex-1 overflow-auto">
-        <div className="flex h-full w-full flex-1 flex-col bg-black">{children}</div>
-      </div>
+        </Link>
+
+        {/* Navigation Links */}
+        <nav className="flex flex-col gap-3 flex-1">
+          {links.map((link, idx) => {
+            const Icon = link.icon
+            const active = isActive(link.href)
+            return (
+              <Link
+                key={idx}
+                href={link.href}
+                className={cn(
+                  "h-10 w-10 rounded-xl flex items-center justify-center transition-all group relative",
+                  active
+                    ? "bg-accent text-white"
+                    : "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+                )}
+                title={link.label}
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                {/* Tooltip */}
+                <span className="absolute left-14 px-2 py-1 bg-neutral-800 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                  {link.label}
+                </span>
+              </Link>
+            )
+          })}
+        </nav>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex flex-1 overflow-auto relative z-0">
+        <div className="flex h-full w-full flex-1 flex-col bg-neutral-950">{children}</div>
+      </main>
     </div>
   )
 }
 
-export const Logo = () => {
-  return (
-    <Link href="/dashboard/agents" className="relative z-20 flex items-center space-x-2 py-1 text-sm font-normal">
-      <div className="h-8 w-8 shrink-0 rounded-full bg-accent flex items-center justify-center">
-        <IconMicrophone className="h-5 w-5 text-white" />
-      </div>
-      <motion.span
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="font-semibold text-xl whitespace-pre text-white"
-      >
-        Oratio
-      </motion.span>
-    </Link>
-  )
-}
-
-export const LogoIcon = () => {
-  return (
-    <Link href="/dashboard/agents" className="relative z-20 flex items-center space-x-2 py-1">
-      <div className="h-8 w-8 shrink-0 rounded-full bg-accent flex items-center justify-center">
-        <IconMicrophone className="h-5 w-5 text-white" />
-      </div>
-    </Link>
-  )
-}

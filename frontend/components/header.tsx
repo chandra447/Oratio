@@ -11,7 +11,7 @@ export function Header() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
               <Mic className="h-5 w-5 text-accent-foreground" />
             </div>
-            <span className="text-xl font-bold">Oratio</span>
+            <span className="text-xl font-bold text-wider" style={{ fontFamily: 'Audiowide, sans-serif' }}>Oratio</span>
           </Link>
 
           <nav className="hidden items-center gap-6 md:flex">
@@ -41,9 +41,6 @@ export function Header() {
             <Button variant="ghost" className="hidden md:inline-flex">
               Log in
             </Button>
-          </Link>
-          <Link href="/signup">
-            <Button className="bg-accent text-accent-foreground hover:bg-accent/90">Get Started</Button>
           </Link>
           <Button variant="ghost" size="icon" className="md:hidden">
             <Menu className="h-5 w-5" />

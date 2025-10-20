@@ -57,7 +57,7 @@ export default function LoginPage() {
             <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center">
               <Mic className="h-6 w-6 text-accent-foreground" />
             </div>
-            <span className="text-2xl font-bold">Oratio</span>
+            <span className="text-2xl font-bold" style={{ fontFamily: 'Audiowide, sans-serif' }} >Oratio</span>
           </Link>
         </div>
 

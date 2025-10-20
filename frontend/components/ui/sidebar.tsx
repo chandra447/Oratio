@@ -79,7 +79,7 @@ export const DesktopSidebar = ({ className, children, ...props }: React.Componen
     <>
       <motion.div
         className={cn(
-          "h-full px-4 py-4 hidden md:flex md:flex-col bg-neutral-900 border-r border-neutral-800 w-[300px] shrink-0",
+          "h-full px-4 py-4 hidden md:flex md:flex-col bg-neutral-900 border-r border-neutral-800 w-[300px] shrink-0 relative z-10",
           className,
         )}
         animate={{

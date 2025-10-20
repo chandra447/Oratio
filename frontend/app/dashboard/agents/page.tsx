@@ -100,7 +100,7 @@ export default function AgentsPage() {
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-full p-8">
           <div className="flex flex-col items-center max-w-md text-center space-y-4">
-            <div className="h-24 w-24 rounded-full bg-neutral-900 border-2 border-dashed border-neutral-700 flex items-center justify-center">
+            <div className="h-24 w-24 rounded-2xl bg-neutral-900/50 border-2 border-dashed border-neutral-700/50 flex items-center justify-center">
               <IconRobot className="h-12 w-12 text-neutral-600" />
             </div>
             <h2 className="text-2xl font-bold text-white">No agents yet</h2>
@@ -108,7 +108,7 @@ export default function AgentsPage() {
               Create your first AI agent to get started. Deploy voice and conversational AI agents in minutes.
             </p>
             <Link href="/dashboard/agents/create">
-              <Button className="bg-accent hover:bg-accent/90 text-white">
+              <Button className="bg-accent hover:bg-accent/90 text-white shadow-lg shadow-accent/20">
                 <IconPlus className="h-4 w-4 mr-2" />
                 Create Your First Agent
               </Button>
@@ -123,8 +123,8 @@ export default function AgentsPage() {
     <DashboardLayout>
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="border-b border-neutral-800 bg-neutral-900/50 backdrop-blur-sm">
-          <div className="p-6 md:p-8">
+        <div className="border-b border-neutral-800/50 bg-neutral-900/30 backdrop-blur-sm">
+          <div className="p-8">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-white">Agents</h1>
@@ -133,7 +133,7 @@ export default function AgentsPage() {
                 </p>
               </div>
               <Link href="/dashboard/agents/create">
-                <Button className="bg-accent hover:bg-accent/90 text-white">
+                <Button className="bg-accent hover:bg-accent/90 text-white shadow-lg shadow-accent/20">
                   <IconPlus className="h-4 w-4 mr-2" />
                   Create New Agent
                 </Button>
@@ -147,14 +147,14 @@ export default function AgentsPage() {
                 placeholder="Search agents..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-neutral-900 border-neutral-800 text-white placeholder:text-neutral-500"
+                className="pl-10 bg-neutral-900/50 border-neutral-800/50 text-white placeholder:text-neutral-500 focus:border-accent/50"
               />
             </div>
           </div>
         </div>
 
         {/* Agents Grid */}
-        <div className="flex-1 overflow-auto p-6 md:p-8">
+        <div className="flex-1 overflow-auto p-8">
           {filteredAgents.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64">
               <IconSearch className="h-12 w-12 text-neutral-600 mb-4" />
@@ -165,10 +165,10 @@ export default function AgentsPage() {
               {filteredAgents.map((agent) => (
                 <Card
                   key={agent.agent_id}
-                  className="bg-neutral-900 border-neutral-800 p-6 hover:border-accent/50 transition-colors"
+                  className="bg-neutral-900/50 border-neutral-800/50 p-6 hover:border-accent/50 hover:shadow-lg hover:shadow-accent/10 transition-all"
                 >
                   <div className="flex items-start gap-4">
-                    <div className="h-12 w-12 rounded-full bg-neutral-800 flex items-center justify-center shrink-0">
+                    <div className="h-12 w-12 rounded-xl bg-neutral-800/50 flex items-center justify-center shrink-0">
                       <IconRobot className="h-6 w-6 text-accent" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -186,7 +186,7 @@ export default function AgentsPage() {
                           {getModeLabel(agent.agent_type)}
                         </span>
                         <Link href={`/dashboard/agents/${agent.agent_id}`}>
-                          <Button size="sm" className="bg-neutral-800 hover:bg-neutral-700 text-white">
+                          <Button size="sm" className="bg-neutral-800/50 hover:bg-neutral-700 text-white">
                             View Details
                           </Button>
                         </Link>
@@ -198,9 +198,9 @@ export default function AgentsPage() {
 
               {/* Create New Agent Card */}
               <Link href="/dashboard/agents/create">
-                <Card className="bg-neutral-900 border-2 border-dashed border-neutral-700 hover:border-accent/50 transition-colors p-6 h-full flex items-center justify-center cursor-pointer group">
+                <Card className="bg-neutral-900/30 border-2 border-dashed border-neutral-700/50 hover:border-accent/50 hover:bg-neutral-900/50 transition-all p-6 h-full flex items-center justify-center cursor-pointer group">
                   <div className="text-center">
-                    <div className="h-12 w-12 rounded-full bg-neutral-800 group-hover:bg-accent/10 flex items-center justify-center mx-auto mb-3 transition-colors">
+                    <div className="h-12 w-12 rounded-xl bg-neutral-800/50 group-hover:bg-accent/10 flex items-center justify-center mx-auto mb-3 transition-colors">
                       <IconPlus className="h-6 w-6 text-neutral-600 group-hover:text-accent transition-colors" />
                     </div>
                     <h3 className="text-lg font-semibold text-white mb-1">Create New Agent</h3>

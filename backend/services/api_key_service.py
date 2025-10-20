@@ -72,8 +72,8 @@ class APIKeyService:
                 expires_at=expires_at,
             )
 
-            # Store in DynamoDB
-            item = api_key.model_dump()
+            # Store in DynamoDB (use camelCase aliases)
+            item = api_key.model_dump(by_alias=True)
             success = self.dynamodb.put_item(self.table_name, item)
 
             if success:

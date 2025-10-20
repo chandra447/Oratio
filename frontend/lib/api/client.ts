@@ -6,7 +6,12 @@
 import { getAccessToken, isTokenExpired, getRefreshToken, storeTokens, clearTokens } from '../auth/token-storage';
 import { refreshToken as refreshTokenApi } from './auth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.NEXT_PUBLIC_API_URL) {
+    return window.NEXT_PUBLIC_API_URL;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
 
 export interface ApiError {
   detail: string;
@@ -53,7 +58,7 @@ export async function apiRequest<T>(
   }
 
   // Make the request
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
     ...options,
     headers,
   });
@@ -157,7 +162,7 @@ export async function uploadFiles<T>(
     headers['Authorization'] = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
     method: 'POST',
     headers,
     body: formData,

@@ -624,8 +624,8 @@ class SimpleNovaSonic:
                             text = json_data['event']['textOutput'].get('content', '')
                             role = json_data['event']['textOutput'].get('role', 'assistant')
                             
-                            # Check for barge-in (interruption)
-                            if '{ "interrupted" : true }' in text:
+                            # More robust interruption detection - handles JSON formatting variations
+                            if '"interrupted"' in text and 'true' in text.lower():
                                 logger.info("[NovaSonic] 🛑 Barge-in detected! User is interrupting")
                                 self.barge_in = True
                                 # Set flag - the audio processing loop will drain the queue
@@ -774,8 +774,15 @@ class ConnectionManager:
                 try:
                     # Check for barge-in - if true, drain the audio queue and skip sending
                     if self.nova_client.barge_in:
-                        logger.info("[ConnectionManager] 🛑 Barge-in active, draining audio queue")
-                        # Drain the audio queue (don't send to frontend)
+                        # IMMEDIATELY send barge-in signal to frontend FIRST
+                        await self.active_connection.send_json({
+                            "type": "barge_in",
+                            "message": "User interrupted"
+                        })
+                        logger.info("[ConnectionManager] ✅ Sent IMMEDIATE barge-in signal to frontend")
+                        
+                        # Then drain the audio queue
+                        logger.info("[ConnectionManager] 🛑 Draining audio queue...")
                         drained_count = 0
                         while not self.nova_client.audio_queue.empty():
                             try:
@@ -784,13 +791,6 @@ class ConnectionManager:
                             except asyncio.QueueEmpty:
                                 break
                         logger.info(f"[ConnectionManager] Drained {drained_count} audio chunks")
-                        
-                        # Send barge-in signal to frontend (only once)
-                        await self.active_connection.send_json({
-                            "type": "barge_in",
-                            "message": "User interrupted"
-                        })
-                        logger.info("[ConnectionManager] ✅ Sent barge-in signal to frontend")
                         
                         # Reset barge-in flag
                         self.nova_client.barge_in = False
@@ -853,7 +853,7 @@ class ConnectionManager:
                                 role = event['textOutput'].get('role', 'assistant')
                                 
                                 # Skip interrupted messages and empty content
-                                if text_content and '{ "interrupted" : true }' not in text_content:
+                                if text_content and not ('"interrupted"' in text_content and 'true' in text_content.lower()):
                                     # Deduplicate: track sent transcripts in a set with timestamp window
                                     transcript_key = f"{role}:{text_content.strip()}"
                                     current_time = asyncio.get_event_loop().time()

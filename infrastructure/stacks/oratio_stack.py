@@ -7,6 +7,9 @@ from cdk_constructs.auth import AuthConstruct
 from cdk_constructs.compute import ComputeConstruct
 from cdk_constructs.workflow import WorkflowConstruct
 from cdk_constructs.iam_roles import AgentCoreRolesConstruct
+from cdk_constructs.ecs_api import EcsApiConstruct
+from cdk_constructs.cdn_api import ApiCdnConstruct
+from cdk_constructs.ecs_frontend import EcsFrontendConstruct
 
 
 class OratioStack(Stack):
@@ -75,6 +78,29 @@ class OratioStack(Stack):
         self.iam_roles = iam_roles
         self.compute = compute
         self.workflow = workflow
+
+        # ECS Fargate + ALB FastAPI backend
+        # Customize domain if you have a hosted zone. Otherwise ALB DNS will be used.
+        self.api = EcsApiConstruct(
+            self,
+            "Api",
+            # domain_name="api.example.com",
+            # hosted_zone_name="example.com",
+            # Image URI comes from CI as BACKEND_IMAGE_URI env during cdk deploy
+        )
+
+        # CloudFront in front of ALB to provide HTTPS default domain without buying DNS
+        self.api_cdn = ApiCdnConstruct(
+            self,
+            "ApiCdn",
+            alb_dns_name=self.api.load_balancer.load_balancer_dns_name,
+        )
+
+        self.frontend = EcsFrontendConstruct(
+            self,
+            "Frontend",
+            backend_api_url=f"https://{self.api_cdn.domain_name}/api/v1",
+        )
 
         # Export IAM role ARNs for use in GitHub Actions
         CfnOutput(
