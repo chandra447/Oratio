@@ -25,19 +25,9 @@ class ApiCdnConstruct(Construct):
             protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY,
         )
 
-        # Disable caching for API; forward query strings and important headers
-        cache_policy = cloudfront.CachePolicy(
-            self,
-            "ApiNoCachePolicy",
-            cache_policy_name="oratio-api-no-cache",
-            default_ttl=Duration.seconds(0),
-            min_ttl=Duration.seconds(0),
-            max_ttl=Duration.seconds(0),
-            header_behavior=cloudfront.CacheHeaderBehavior.allow_list(
-                "Authorization", "X-API-Key", "Origin"
-            ),
-            query_string_behavior=cloudfront.CacheQueryStringBehavior.all(),
-        )
+        # Disable caching for API - use managed policy instead of custom
+        # When caching is disabled, we can't specify header_behavior
+        cache_policy = cloudfront.CachePolicy.CACHING_DISABLED
 
         origin_request_policy = cloudfront.OriginRequestPolicy(
             self,

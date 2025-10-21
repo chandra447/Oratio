@@ -139,7 +139,7 @@ class EcsApiConstruct(Construct):
                 zone=zone,
                 record_name=domain_name.split(".")[0],
                 target=route53.RecordTarget.from_alias(targets.LoadBalancerTarget(svc.load_balancer)),
-                ttl=Duration.minutes(5),
+                # Note: Alias records don't support custom TTL - AWS manages it automatically
             )
 
 

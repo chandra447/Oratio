@@ -80,6 +80,16 @@ class EcsFrontendConstruct(Construct):
 
         self.load_balancer = svc.load_balancer
 
+        # Health check for Next.js
+        svc.target_group.configure_health_check(
+            path="/",
+            healthy_http_codes="200",
+            interval=Duration.seconds(30),
+            timeout=Duration.seconds(5),
+        )
+
+        # Cache policy for Next.js - no caching for dynamic content
+        # Note: "Cookie" cannot be in header_behavior, use cookie_behavior instead
         cloudfront_cache_policy = cloudfront.CachePolicy(
             self,
             "FrontendCachePolicy",
@@ -88,8 +98,24 @@ class EcsFrontendConstruct(Construct):
             min_ttl=Duration.seconds(0),
             max_ttl=Duration.days(1),
             cookie_behavior=cloudfront.CacheCookieBehavior.all(),
-            header_behavior=cloudfront.CacheHeaderBehavior.allow_list("Authorization", "Cookie"),
+            header_behavior=cloudfront.CacheHeaderBehavior.allow_list("Authorization"),
             query_string_behavior=cloudfront.CacheQueryStringBehavior.all(),
+        )
+
+        # Origin request policy to forward headers and cookies to Next.js
+        origin_request_policy = cloudfront.OriginRequestPolicy(
+            self,
+            "FrontendOriginRequestPolicy",
+            origin_request_policy_name="oratio-frontend-origin-req",
+            header_behavior=cloudfront.OriginRequestHeaderBehavior.allow_list(
+                "Accept",
+                "Accept-Language",
+                "CloudFront-Viewer-Country",
+                "Referer",
+                "User-Agent",
+            ),
+            query_string_behavior=cloudfront.OriginRequestQueryStringBehavior.all(),
+            cookie_behavior=cloudfront.OriginRequestCookieBehavior.all(),
         )
 
         distribution = cloudfront.Distribution(
@@ -102,6 +128,7 @@ class EcsFrontendConstruct(Construct):
                 ),
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
                 cache_policy=cloudfront_cache_policy,
+                origin_request_policy=origin_request_policy,
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             ),
         )
@@ -118,7 +145,7 @@ class EcsFrontendConstruct(Construct):
                 zone=zone,
                 record_name=domain_name.split(".")[0],
                 target=route53.RecordTarget.from_alias(targets.LoadBalancerTarget(svc.load_balancer)),
-                ttl=Duration.minutes(5),
+                # Note: Alias records don't support custom TTL - AWS manages it automatically
             )
 
 
