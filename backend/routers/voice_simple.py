@@ -264,8 +264,8 @@ class SimpleNovaSonic:
                     "sessionStart": {
                         "inferenceConfiguration": {
                             "maxTokens": 1024,
-                            "topP": 0.9,
-                            "temperature": 0.7
+                            "topP": 0.95,  # Higher = more focused on likely tokens
+                            "temperature": 0.8  # Slightly higher for more natural speech patterns
                         }
                     }
                 }
@@ -298,7 +298,7 @@ class SimpleNovaSonic:
                                 {
                                     "toolSpec": {
                                         "name": "ask_agent",
-                                        "description": "Query the AI agent to get information, perform actions, or access knowledge base. Use this for any user request that requires data lookup, computation, or business logic.",
+                                        "description": "IMPORTANT: This tool queries a specialized AI agent. YOU MUST ALWAYS speak to the user BEFORE calling this tool. Required workflow: 1) First, verbally tell the user you're checking (e.g., 'Let me look that up for you'), 2) Then call this tool, 3) Finally, share the results. Never call this tool without first speaking to the user - silence creates a poor user experience.",
                                         "inputSchema": {
                                             "json": json.dumps({
                                                 "type": "object",
@@ -662,9 +662,9 @@ class SimpleNovaSonic:
                             logger.info(f"[NovaSonic] Tool result received")
                         
         except Exception as e:
-            # Check if it's a validation exception from stream closure
-            if "ValidationException" in str(type(e)) or "Invalid input request" in str(e):
-                logger.info("[NovaSonic] Stream closed (validation exception during shutdown)")
+            # Check if it's a validation exception from stream closure or invalid event bytes
+            if "ValidationException" in str(type(e)) or "Invalid input request" in str(e) or "InvalidEventBytes" in str(type(e)):
+                logger.info("[NovaSonic] Stream closed (expected during shutdown or tool execution)")
             else:
                 logger.error(f"[NovaSonic] Error processing responses: {e}", exc_info=True)
         finally:
@@ -1007,8 +1007,37 @@ async def voice_agent_websocket(
             await websocket.send_json({"type": "error", "message": "Agent not active"})
             await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
             return
-        
-        voice_prompt = agent.voice_prompt or agent.system_prompt or "You are a helpful voice assistant."
+        voice_prompt_template = f"""Your name is {agent.agent_name}. {agent.voice_prompt}
+
+PERSONALITY: {agent.voice_personality}
+
+===CRITICAL TOOL USAGE PROTOCOL===
+When you need to use the ask_agent tool, you MUST follow this exact sequence:
+
+STEP 1: SPEAK FIRST - Always verbally acknowledge what you're about to do
+  Examples: "Let me check that for you", "One moment while I look that up", "I'll find that information"
+
+STEP 2: USE TOOL - Then call the ask_agent tool with your query
+
+STEP 3: RESPOND - Present the tool's results naturally to the user
+
+NEVER skip Step 1. Calling a tool without speaking first creates awkward silence and confuses users.
+
+===CORRECT EXAMPLE===
+User: "What's my account balance?"
+Assistant: "Let me check your account balance for you." [speaks this out loud]
+Assistant: [calls ask_agent tool with query: "retrieve account balance"]
+Assistant: [receives result: "$1,234.56"]
+Assistant: "Your current account balance is $1,234.56"
+
+===INCORRECT EXAMPLE (DO NOT DO THIS)===
+User: "What's my account balance?"
+Assistant: [immediately calls ask_agent tool] ← WRONG! User hears silence
+Assistant: "Your balance is $1,234.56"
+
+Remember: Humans need to hear you're working on their request. Always speak before using tools.
+"""
+        voice_prompt = voice_prompt_template if agent.voice_prompt else "You are a helpful voice assistant. CRITICAL: Always verbally acknowledge before using any tools by saying something like 'Let me check that for you' to avoid awkward silence. Never call tools silently."
         print(f"🎯 Voice prompt: {voice_prompt[:50]}...", flush=True)
         logger.info(f"[Voice] Agent found: {agent.agent_name}")
         
