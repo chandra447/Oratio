@@ -39,7 +39,8 @@ export async function sendMessage(
     throw new Error('No authentication token found');
   }
 
-  const url = `${getApiBaseUrl()}/api/v1/chat/${agentId}/${actorId}/${sessionId}${testMode ? '?test=true' : ''}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/api/v1/chat/${agentId}/${actorId}/${sessionId}${testMode ? '?test=true' : ''}`;
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

@@ -39,6 +39,7 @@ export function connectVoiceAgent(
   testMode: boolean = false
 ): WebSocket {
   const accessToken = getAccessToken();
+  // Get the base URL dynamically at request time
   const apiBaseUrl = getApiBaseUrl();
   
   // WebSocket URL (ws:// for http, wss:// for https)

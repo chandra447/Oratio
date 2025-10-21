@@ -2,6 +2,8 @@
  * Centralized API configuration that handles runtime URL injection
  */
 
+import { isRuntimeConfigAvailable } from './runtime-config';
+
 /**
  * Validates if a URL is properly formatted
  */
@@ -23,14 +25,13 @@ function isValidUrl(url: string): boolean {
  */
 export function getApiBaseUrl(): string {
   // Check for runtime config first (injected by docker-entrypoint.sh in production)
-  if (typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_API_URL) {
+  if (isRuntimeConfigAvailable()) {
     const runtimeUrl = (window as any).NEXT_PUBLIC_API_URL;
-    // Don't use placeholder value
-    if (runtimeUrl !== '__PLACEHOLDER__' && isValidUrl(runtimeUrl)) {
+    if (runtimeUrl && runtimeUrl !== '__PLACEHOLDER__' && isValidUrl(runtimeUrl)) {
       return runtimeUrl;
     }
-    // If runtime config is invalid, log a warning
-    if (runtimeUrl !== '__PLACEHOLDER__') {
+    
+    if (!isValidUrl(runtimeUrl)) {
       console.warn(`Invalid runtime API URL: ${runtimeUrl}. Falling back to build-time configuration.`);
     }
   }

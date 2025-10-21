@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import type { UserProfile, LoginData, RegisterData } from '../api/auth';
 import * as authApi from '../api/auth';
 import * as tokenStorage from './token-storage';
+import { waitForRuntimeConfig } from '../api/runtime-config';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -35,6 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUser = useCallback(async () => {
     try {
+      // Wait for runtime configuration to be available
+      await waitForRuntimeConfig();
+      
       const accessToken = tokenStorage.getAccessToken();
       
       if (!accessToken || tokenStorage.isTokenExpired()) {
@@ -71,6 +75,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (data: LoginData) => {
     try {
+      // Wait for runtime configuration to be available
+      await waitForRuntimeConfig();
+      
       const tokens = await authApi.login(data);
       tokenStorage.storeTokens(tokens);
       
@@ -92,6 +99,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(async (data: RegisterData): Promise<{ message: string }> => {
     try {
+      // Wait for runtime configuration to be available
+      await waitForRuntimeConfig();
+      
       const result = await authApi.register(data);
       return {
         message: result.message || 'Registration successful. Please check your email for verification code.'

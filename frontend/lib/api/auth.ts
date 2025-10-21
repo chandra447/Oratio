@@ -41,7 +41,8 @@ export interface ApiError {
  * Register a new user
  */
 export async function register(data: RegisterData): Promise<{ user_id: string; email: string; message: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/register`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/auth/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -61,7 +62,8 @@ export async function register(data: RegisterData): Promise<{ user_id: string; e
  * Confirm user email with verification code
  */
 export async function confirmRegistration(email: string, confirmationCode: string): Promise<{ message: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/confirm`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/auth/confirm`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -81,7 +83,8 @@ export async function confirmRegistration(email: string, confirmationCode: strin
  * Login user and get JWT tokens
  */
 export async function login(data: LoginData): Promise<TokenResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/login`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -101,7 +104,8 @@ export async function login(data: LoginData): Promise<TokenResponse> {
  * Refresh access and ID tokens using refresh token
  */
 export async function refreshToken(refreshToken: string): Promise<TokenResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/refresh`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/auth/refresh`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -121,7 +125,8 @@ export async function refreshToken(refreshToken: string): Promise<TokenResponse>
  * Get current user profile
  */
 export async function getCurrentUser(accessToken: string): Promise<UserProfile> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/me`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/auth/me`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${accessToken}`,
@@ -141,7 +146,8 @@ export async function getCurrentUser(accessToken: string): Promise<UserProfile> 
  * Initiate forgot password flow
  */
 export async function forgotPassword(email: string): Promise<{ message: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/forgot-password`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/auth/forgot-password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -165,7 +171,8 @@ export async function resetPassword(
   confirmationCode: string,
   newPassword: string
 ): Promise<{ message: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/reset-password`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/auth/reset-password`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -189,7 +196,8 @@ export async function resetPassword(
  * Logout user (client-side token removal)
  */
 export async function logout(accessToken: string): Promise<{ message: string }> {
-  const response = await fetch(`${getApiBaseUrl()}/api/v1/auth/logout`, {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}/api/v1/auth/logout`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${accessToken}`,

@@ -51,8 +51,9 @@ export async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${accessToken}`;
   }
 
-  // Make the request
-  const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
+  // Make the request with dynamically resolved base URL
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     headers,
   });
@@ -156,7 +157,9 @@ export async function uploadFiles<T>(
     headers['Authorization'] = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(`${getApiBaseUrl()}${endpoint}`, {
+  // Make the request with dynamically resolved base URL
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}${endpoint}`, {
     method: 'POST',
     headers,
     body: formData,

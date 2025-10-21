@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/auth-context";
 import Script from "next/script";
+import "@/lib/api/config-test"; // Import to make test function available globally
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

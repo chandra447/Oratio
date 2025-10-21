@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 import { IconArrowLeft } from "@tabler/icons-react"
 import type { Agent } from "@/lib/api/agents"
 import { getAgent } from "@/lib/api/agents"
+import { getApiBaseUrl } from "@/lib/api/config"
 import {
   AgentDetailsCard,
   VoiceTestingInterface,
@@ -171,11 +172,9 @@ export default function AgentDetailPage() {
 
             {/* API Documentation Section */}
             <div className="mt-6">
-              <ApiDocumentation 
+              <ApiDocumentation
                 agent={agent}
-                apiEndpoint={(typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_API_URL && (window as any).NEXT_PUBLIC_API_URL !== '__PLACEHOLDER__' 
-                  ? (window as any).NEXT_PUBLIC_API_URL 
-                  : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api/v1"}
+                apiEndpoint={getApiBaseUrl() + "/api/v1"}
               />
             </div>
           </div>
