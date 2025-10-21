@@ -3,9 +3,7 @@
  */
 
 import { getAccessToken } from '../auth/token-storage';
-
-// Use environment variable (baked in at build time) or fallback to localhost for dev
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { getApiBaseUrl } from './config';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -41,7 +39,7 @@ export async function sendMessage(
     throw new Error('No authentication token found');
   }
 
-  const url = `${API_BASE_URL}/api/v1/chat/${agentId}/${actorId}/${sessionId}${testMode ? '?test=true' : ''}`;
+  const url = `${getApiBaseUrl()}/api/v1/chat/${agentId}/${actorId}/${sessionId}${testMode ? '?test=true' : ''}`;
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

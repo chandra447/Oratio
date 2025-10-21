@@ -36,7 +36,10 @@ export function ChatTest({ agentId, apiKey }: ChatTestProps) {
     setIsLoading(true)
 
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/chat`, {
+      const { getApiBaseUrl } = await import('@/lib/api/config');
+      const apiUrl = getApiBaseUrl();
+      
+      const response = await fetch(`${apiUrl}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

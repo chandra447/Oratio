@@ -4,9 +4,7 @@
  */
 
 import { getAccessToken } from '../auth/token-storage'
-
-// Use environment variable (baked in at build time) or fallback to localhost for dev
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+import { getApiBaseUrl } from './config'
 
 export interface KnowledgeBase {
   knowledgeBaseId: string
@@ -33,7 +31,7 @@ export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
     throw new Error('No access token found')
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/knowledge-bases`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/knowledge-bases`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -59,7 +57,7 @@ export async function getKnowledgeBase(knowledgeBaseId: string): Promise<Knowled
     throw new Error('No access token found')
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/knowledge-bases/${knowledgeBaseId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/knowledge-bases/${knowledgeBaseId}`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -90,7 +88,7 @@ export async function uploadFiles(files: File[]): Promise<KnowledgeBase> {
     formData.append('files', file)
   })
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/knowledge-bases/upload`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/knowledge-bases/upload`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -116,7 +114,7 @@ export async function deleteKnowledgeBase(knowledgeBaseId: string): Promise<void
     throw new Error('No access token found')
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/knowledge-bases/${knowledgeBaseId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/knowledge-bases/${knowledgeBaseId}`, {
     method: 'DELETE',
     headers: {
       'Authorization': `Bearer ${token}`,

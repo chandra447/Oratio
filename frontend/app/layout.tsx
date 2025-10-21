@@ -30,12 +30,12 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet" />
+        {/* Load runtime configuration ASAP - inline script executes immediately */}
+        <script src="/config.js" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* Load runtime configuration from public/config.js */}
-        <Script src="/config.js" strategy="beforeInteractive" />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
