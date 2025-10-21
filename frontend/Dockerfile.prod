@@ -12,7 +12,20 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 # API URL will be injected via build-arg from CI/CD (GitHub Secrets)
-ARG NEXT_PUBLIC_API_URL=https://d3cp7cujulcncl.cloudfront.net
+ARG NEXT_PUBLIC_API_URL
+
+# Validate that NEXT_PUBLIC_API_URL is provided
+RUN if [ -z "$NEXT_PUBLIC_API_URL" ]; then \
+    echo "Error: NEXT_PUBLIC_API_URL build-arg is required but not set"; \
+    exit 1; \
+  fi
+
+# Validate URL format
+RUN if ! echo "$NEXT_PUBLIC_API_URL" | grep -E '^https?://[^ ]+$' > /dev/null; then \
+    echo "Error: Invalid NEXT_PUBLIC_API_URL format: $NEXT_PUBLIC_API_URL"; \
+    exit 1; \
+  fi
+
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

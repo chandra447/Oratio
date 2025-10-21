@@ -3,6 +3,18 @@
  */
 
 /**
+ * Validates if a URL is properly formatted
+ */
+function isValidUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get the API base URL from runtime config or build-time environment variable.
  * This function checks multiple sources in order of precedence:
  * 1. Runtime config injected by docker-entrypoint.sh (window.NEXT_PUBLIC_API_URL)
@@ -14,12 +26,42 @@ export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_API_URL) {
     const runtimeUrl = (window as any).NEXT_PUBLIC_API_URL;
     // Don't use placeholder value
-    if (runtimeUrl !== '__PLACEHOLDER__') {
+    if (runtimeUrl !== '__PLACEHOLDER__' && isValidUrl(runtimeUrl)) {
       return runtimeUrl;
+    }
+    // If runtime config is invalid, log a warning
+    if (runtimeUrl !== '__PLACEHOLDER__') {
+      console.warn(`Invalid runtime API URL: ${runtimeUrl}. Falling back to build-time configuration.`);
     }
   }
   
-  // Fallback to build-time environment variable or localhost for dev
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  // Fallback to build-time environment variable
+  const buildTimeUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (buildTimeUrl && isValidUrl(buildTimeUrl)) {
+    return buildTimeUrl;
+  }
+  
+  // Final fallback to localhost for development
+  const fallbackUrl = 'http://localhost:8000';
+  if (!buildTimeUrl) {
+    console.warn(`No API URL configured. Using fallback: ${fallbackUrl}`);
+  } else {
+    console.warn(`Invalid build-time API URL: ${buildTimeUrl}. Using fallback: ${fallbackUrl}`);
+  }
+  
+  return fallbackUrl;
 }
 
+/**
+ * Get the API base URL with validation and error handling
+ * Throws an error if no valid URL can be determined
+ */
+export function getValidatedApiBaseUrl(): string {
+  const url = getApiBaseUrl();
+  
+  if (!isValidUrl(url)) {
+    throw new Error(`Invalid API URL configuration: ${url}`);
+  }
+  
+  return url;
+}

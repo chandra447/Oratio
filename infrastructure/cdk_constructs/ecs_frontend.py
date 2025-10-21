@@ -33,6 +33,11 @@ class EcsFrontendConstruct(Construct):
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
         stack = Stack.of(self)
+        
+        # Validate backend API URL format
+        import re
+        if not re.match(r'^https?://[^ ]+$', backend_api_url):
+            raise ValueError(f"Invalid backend_api_url format: {backend_api_url}. Must be a valid HTTP/HTTPS URL.")
 
         vpc = ec2.Vpc(self, "FrontendVpc", nat_gateways=1)
         cluster = ecs.Cluster(self, "FrontendCluster", vpc=vpc)
@@ -75,6 +80,7 @@ class EcsFrontendConstruct(Construct):
                 container_port=3000,
                 environment={
                     "NEXT_PUBLIC_API_URL": backend_api_url,
+                    "NODE_ENV": "production",
                 },
             ),
         )

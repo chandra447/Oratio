@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { MicSparklesIcon } from "@/components/ui/mic-sparkles-icon"
+import { useAuth } from "@/lib/auth/auth-context"
 
 export default function DashboardLayout({
   children,
@@ -12,6 +13,7 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const { logout } = useAuth()
   
   const links = [
     {
@@ -31,8 +33,9 @@ export default function DashboardLayout({
     },
     {
       label: "Logout",
-      href: "/",
+      href: "#",
       icon: IconLogout,
+      action: logout,
     },
   ]
 
@@ -59,6 +62,28 @@ export default function DashboardLayout({
           {links.map((link, idx) => {
             const Icon = link.icon
             const active = isActive(link.href)
+            
+            if (link.action) {
+              // For logout button
+              return (
+                <button
+                  key={idx}
+                  onClick={link.action}
+                  className={cn(
+                    "h-10 w-10 rounded-xl flex items-center justify-center transition-all group relative",
+                    "text-neutral-400 hover:text-white hover:bg-neutral-800/50"
+                  )}
+                  title={link.label}
+                >
+                  <Icon className="h-5 w-5 shrink-0" />
+                  {/* Tooltip */}
+                  <span className="absolute left-14 px-2 py-1 bg-neutral-800 text-white text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity">
+                    {link.label}
+                  </span>
+                </button>
+              )
+            }
+            
             return (
               <Link
                 key={idx}
