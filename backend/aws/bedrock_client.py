@@ -5,7 +5,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
-
+#trigger ci/cd
 
 class BedrockClient:
     """Bedrock client wrapper with tagging support for Oratio platform"""
