@@ -7,10 +7,16 @@ import { getAccessToken, isTokenExpired, getRefreshToken, storeTokens, clearToke
 import { refreshToken as refreshTokenApi } from './auth';
 
 const getApiBaseUrl = () => {
-  if (typeof window !== 'undefined' && window.NEXT_PUBLIC_API_URL) {
-    return window.NEXT_PUBLIC_API_URL;
+  // Check if running locally (localhost or 127.0.0.1)
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8000';
+    }
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  
+  // Production CloudFront URL
+  return 'https://d3cp7cujulcncl.cloudfront.net';
 };
 
 export interface ApiError {

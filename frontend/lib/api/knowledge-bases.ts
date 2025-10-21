@@ -5,7 +5,18 @@
 
 import { getAccessToken } from '../auth/token-storage'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// Auto-detect environment: localhost for dev, CloudFront for production
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8000';
+    }
+  }
+  return 'https://d3cp7cujulcncl.cloudfront.net';
+};
+
+const API_BASE_URL = getApiBaseUrl()
 
 export interface KnowledgeBase {
   knowledgeBaseId: string
@@ -27,7 +38,7 @@ export interface ApiError {
  */
 export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
   const token = getAccessToken()
-  
+
   if (!token) {
     throw new Error('No access token found')
   }
@@ -53,7 +64,7 @@ export async function listKnowledgeBases(): Promise<KnowledgeBase[]> {
  */
 export async function getKnowledgeBase(knowledgeBaseId: string): Promise<KnowledgeBase> {
   const token = getAccessToken()
-  
+
   if (!token) {
     throw new Error('No access token found')
   }
@@ -79,7 +90,7 @@ export async function getKnowledgeBase(knowledgeBaseId: string): Promise<Knowled
  */
 export async function uploadFiles(files: File[]): Promise<KnowledgeBase> {
   const token = getAccessToken()
-  
+
   if (!token) {
     throw new Error('No access token found')
   }
@@ -110,7 +121,7 @@ export async function uploadFiles(files: File[]): Promise<KnowledgeBase> {
  */
 export async function deleteKnowledgeBase(knowledgeBaseId: string): Promise<void> {
   const token = getAccessToken()
-  
+
   if (!token) {
     throw new Error('No access token found')
   }
@@ -142,13 +153,13 @@ export function getFileCount(kb: KnowledgeBase): number {
 export function formatRelativeTime(timestamp: number): string {
   const now = Date.now() / 1000
   const diff = now - timestamp
-  
+
   if (diff < 60) return 'just now'
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
   if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`
   if (diff < 2592000) return `${Math.floor(diff / 604800)}w ago`
-  
+
   return new Date(timestamp * 1000).toLocaleDateString()
 }
 

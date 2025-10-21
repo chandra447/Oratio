@@ -99,7 +99,7 @@ class OratioStack(Stack):
         self.frontend = EcsFrontendConstruct(
             self,
             "Frontend",
-            backend_api_url=f"https://{self.api_cdn.domain_name}/api/v1",
+            backend_api_url=f"https://{self.api_cdn.domain_name}",
         )
 
         # Export IAM role ARNs for use in GitHub Actions

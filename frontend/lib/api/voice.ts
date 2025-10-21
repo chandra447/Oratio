@@ -4,7 +4,18 @@
 
 import { getAccessToken } from '../auth/token-storage';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Auto-detect environment: localhost for dev, CloudFront for production
+const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:8000';
+    }
+  }
+  return 'https://d3cp7cujulcncl.cloudfront.net';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface VoiceTranscript {
   role: 'user' | 'assistant';
