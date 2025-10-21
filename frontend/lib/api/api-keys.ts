@@ -1,6 +1,5 @@
 /**
  * API Keys API client
- * trigger github action
  */
 
 import { get, post, del } from './client';
