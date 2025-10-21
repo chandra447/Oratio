@@ -75,22 +75,6 @@ wheels = [
 ]
 
 [[package]]
-name = "aws-cdk-aws-amplify-alpha"
-version = "2.220.0a0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aws-cdk-lib" },
-    { name = "constructs" },
-    { name = "jsii" },
-    { name = "publication" },
-    { name = "typeguard" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/0c/4d92349e18e110f29a18904ba1ba55b3411b7b37a032963501f88c5512f1/aws_cdk_aws_amplify_alpha-2.220.0a0.tar.gz", hash = "sha256:aef68a6935f3b370b47e31d1cb7dcbd4b93aa0aaba3f2a58b7ed3675f2f5589c", size = 130654, upload-time = "2025-10-14T13:57:47.973Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4d/ec/527a357cac103639ff593e032ab72e883ea58abe506e780a82fc0e2e3528/aws_cdk_aws_amplify_alpha-2.220.0a0-py3-none-any.whl", hash = "sha256:9d62a455088beb76b216b5c2ce9e3042899c98c62e9448df2af7a612df5cc901", size = 129100, upload-time = "2025-10-14T13:56:56.432Z" },
-]
-
-[[package]]
 name = "aws-cdk-aws-lambda-python-alpha"
 version = "2.219.0a0"
 source = { registry = "https://pypi.org/simple" }
@@ -717,7 +701,6 @@ name = "oratio-infrastructure"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "aws-cdk-aws-amplify-alpha" },
     { name = "aws-cdk-aws-lambda-python-alpha" },
     { name = "aws-cdk-lib" },
     { name = "bedrock-agentcore-starter-toolkit" },
@@ -734,7 +717,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aws-cdk-aws-amplify-alpha", specifier = ">=2.170.0a0" },
     { name = "aws-cdk-aws-lambda-python-alpha", specifier = ">=2.170.0a0" },
     { name = "aws-cdk-lib", specifier = ">=2.170.0" },
     { name = "bedrock-agentcore-starter-toolkit", specifier = ">=0.1.0" },
