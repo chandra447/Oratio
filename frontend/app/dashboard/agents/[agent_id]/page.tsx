@@ -173,14 +173,9 @@ export default function AgentDetailPage() {
             <div className="mt-6">
               <ApiDocumentation 
                 agent={agent}
-                apiEndpoint={(() => {
-                  // Import getApiBaseUrl dynamically to avoid SSR issues
-                  if (typeof window !== 'undefined') {
-                    const { getApiBaseUrl } = require('@/lib/api/config');
-                    return getApiBaseUrl() + "/api/v1";
-                  }
-                  return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api/v1";
-                })()}
+                apiEndpoint={(typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_API_URL && (window as any).NEXT_PUBLIC_API_URL !== '__PLACEHOLDER__' 
+                  ? (window as any).NEXT_PUBLIC_API_URL 
+                  : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000") + "/api/v1"}
               />
             </div>
           </div>
