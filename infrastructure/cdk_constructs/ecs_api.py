@@ -84,6 +84,8 @@ class EcsApiConstruct(Construct):
                 environment={
                     "AWS_REGION": stack.region,
                     "API_V1_PREFIX": "/api/v1",
+                    # Allow CORS from any origin for now (tighten in production)
+                    "CORS_ORIGINS": '["*"]',
                 },
                 secrets={
                     "COGNITO_CLIENT_ID": ecs.Secret.from_ssm_parameter(

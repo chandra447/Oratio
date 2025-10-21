@@ -34,13 +34,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Script
-          id="runtime-env"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `window.NEXT_PUBLIC_API_URL = ${JSON.stringify(process.env.NEXT_PUBLIC_API_URL || "")}`,
-          }}
-        />
+        {/* Load runtime configuration from public/config.js */}
+        <Script src="/config.js" strategy="beforeInteractive" />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

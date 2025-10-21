@@ -49,3 +49,5 @@ class AuthConstruct(Construct):
         # Export values
         self.user_pool_id = self.user_pool.user_pool_id
         self.user_pool_client_id = self.user_pool_client.user_pool_client_id
+        
+        # Note: SSM parameters are created manually or via separate process

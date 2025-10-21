@@ -11,10 +11,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# Set a placeholder API URL for build - will be overridden at runtime
+ARG NEXT_PUBLIC_API_URL=__PLACEHOLDER__
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build Next.js app (API URL injected at runtime via env)
+# Build Next.js app
 RUN npm run build
 
 FROM node:20-alpine AS runner
@@ -32,6 +35,11 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.ts ./next.config.ts
 COPY --from=builder /app/node_modules ./node_modules
 
+# Copy entrypoint script
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 EXPOSE 3000
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["npm", "run", "start"]
  
