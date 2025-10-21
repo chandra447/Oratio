@@ -11,13 +11,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-# Bake the API URL directly into the build
-ARG NEXT_PUBLIC_API_URL=https://d3cp7cujulcncl.cloudfront.net
+# API URL will be injected via build-arg from CI/CD (GitHub Secrets)
+ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build Next.js app with API URL baked in
+# Build Next.js app with API URL baked in from build-arg
 RUN npm run build
 
 FROM node:20-alpine AS runner

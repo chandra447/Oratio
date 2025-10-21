@@ -16,7 +16,6 @@ import boto3
 from aws_sdk_bedrock_runtime.client import BedrockRuntimeClient, InvokeModelWithBidirectionalStreamOperationInput
 from aws_sdk_bedrock_runtime.models import InvokeModelWithBidirectionalStreamInputChunk, BidirectionalInputPayloadPart
 from aws_sdk_bedrock_runtime.config import Config
-from smithy_aws_core.identity.environment import EnvironmentCredentialsResolver
 
 from config import settings
 from services.agent_service import AgentService
@@ -203,17 +202,32 @@ class SimpleNovaSonic:
         logger.info(f"[NovaSonic] Initialized with prompt_name={self.prompt_name}, agent_id={agent_id}")
     
     def _initialize_client(self):
-        """Initialize the Bedrock client."""
-        # Config with environment credentials (no IMDS for local dev)
-        credentials_resolver = EnvironmentCredentialsResolver()
+        """Initialize the Bedrock client with proper credential resolution.
+        
+        Uses AWS SDK's default credential chain which automatically handles:
+        - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) for local dev
+        - ECS Task Role credentials via container metadata endpoint for production
+        - IAM instance profile for EC2
+        """
+        from smithy_aws_core.identity.chain import create_default_chain
+        from smithy_http.aio.aiohttp import AIOHTTPClient
+        
+        # Create HTTP client for credential resolution (needed by ContainerCredentialsResolver)
+        http_client = AIOHTTPClient()
+        
+        # Create default credential chain that tries in order:
+        # 1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)
+        # 2. ECS container credentials (via AWS_CONTAINER_CREDENTIALS_RELATIVE_URI)
+        # 3. EC2 instance metadata service (IMDS)
+        credentials_resolver = create_default_chain(http_client)
         
         config = Config(
             region=settings.AWS_REGION,
-            aws_credentials_identity_resolver=EnvironmentCredentialsResolver(),
-             endpoint_uri=f"https://bedrock-runtime.{settings.AWS_REGION}.amazonaws.com",
+            aws_credentials_identity_resolver=credentials_resolver,
+            endpoint_uri=f"https://bedrock-runtime.{settings.AWS_REGION}.amazonaws.com",
         )
         self.client = BedrockRuntimeClient(config=config)
-        logger.info("[NovaSonic] Bedrock client initialized")
+        logger.info("[NovaSonic] Bedrock client initialized with default credential chain")
     
     async def send_event(self, event_json: str):
         """Send an event to the stream."""
