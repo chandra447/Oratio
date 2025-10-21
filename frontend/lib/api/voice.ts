@@ -4,8 +4,19 @@
 
 import { getAccessToken } from '../auth/token-storage';
 
-// Use environment variable (baked in at build time) or fallback to localhost for dev
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Get API base URL from runtime config or build-time env var
+const getApiBaseUrl = () => {
+  // Check for runtime config first (injected by docker-entrypoint.sh in production)
+  if (typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_API_URL) {
+    const runtimeUrl = (window as any).NEXT_PUBLIC_API_URL;
+    // Don't use placeholder value
+    if (runtimeUrl !== '__PLACEHOLDER__') {
+      return runtimeUrl;
+    }
+  }
+  // Fallback to build-time environment variable or localhost for dev
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+};
 
 export interface VoiceTranscript {
   role: 'user' | 'assistant';
@@ -41,10 +52,11 @@ export function connectVoiceAgent(
   testMode: boolean = false
 ): WebSocket {
   const accessToken = getAccessToken();
+  const apiBaseUrl = getApiBaseUrl();
   
   // WebSocket URL (ws:// for http, wss:// for https)
-  const wsProtocol = API_BASE_URL.startsWith('https') ? 'wss' : 'ws';
-  const wsBaseUrl = API_BASE_URL.replace(/^https?:\/\//, '');
+  const wsProtocol = apiBaseUrl.startsWith('https') ? 'wss' : 'ws';
+  const wsBaseUrl = apiBaseUrl.replace(/^https?:\/\//, '');
   
   // Build URL with test mode or API key
   let url = `${wsProtocol}://${wsBaseUrl}/api/v1/voice/${agentId}/${actorId}/${sessionId}`;

@@ -7,7 +7,15 @@ import { getAccessToken, isTokenExpired, getRefreshToken, storeTokens, clearToke
 import { refreshToken as refreshTokenApi } from './auth';
 
 const getApiBaseUrl = () => {
-  // Use environment variable (baked in at build time) or fallback to localhost for dev
+  // Check for runtime config first (injected by docker-entrypoint.sh in production)
+  if (typeof window !== 'undefined' && (window as any).NEXT_PUBLIC_API_URL) {
+    const runtimeUrl = (window as any).NEXT_PUBLIC_API_URL;
+    // Don't use placeholder value
+    if (runtimeUrl !== '__PLACEHOLDER__') {
+      return runtimeUrl;
+    }
+  }
+  // Fallback to build-time environment variable or localhost for dev
   return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 };
 
