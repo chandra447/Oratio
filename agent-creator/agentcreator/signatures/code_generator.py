@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 def product_inquiry_agent(query: str) -> str:
     \"\"\"Handle product inquiries.\"\"\"
     agent = Agent(
-        model="amazon.nova-pro-v1:0",  # Use Nova Pro
+        model="amazon.nova-pro-v1:0",  # Use Nova Pro dont do bedrock/amazon.nova-pro-v1:0
         system_prompt="You are a product expert. Use retrieve tool to answer questions.",
         tools=[retrieve]
     )
@@ -95,7 +95,7 @@ def create_orchestrator(hooks=None, state=None):
         state: Dict with actor_id and session_id (injected by Chameleon)
     \"\"\"
     return Agent(
-        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro instead of default Claude
+        model="amazon.nova-pro-v1:0",  # Use Nova Pro instead of default Claude
         system_prompt="Route queries to specialists. Use product_inquiry_agent for products, order_tracking_agent for orders, returns_processing_agent for returns.",
         tools=[product_inquiry_agent, order_tracking_agent, returns_processing_agent, handoff_to_user],
         hooks=hooks or [],
@@ -147,7 +147,7 @@ def create_agent(hooks=None, state=None):
         state: Dict with actor_id and session_id (injected by Chameleon)
     \"\"\"
     return Agent(
-        model="bedrock/amazon.nova-pro-v1:0",  # Use Nova Pro instead of default Claude
+        model="amazon.nova-pro-v1:0",  # Use Nova Pro instead of default Claude
         system_prompt="You help customers with inquiries using retrieve and handoff_to_user tools.",
         tools=[retrieve, handoff_to_user],
         hooks=hooks or [],
@@ -201,6 +201,7 @@ CRITICAL RULES (BASED ON VERIFIED DOCUMENTATION):
 ✅ ALWAYS include logging and error handling
 ✅ ALWAYS handle both 'prompt' and 'input' keys in payload
 ✅ GENERATED CODE SHOULD BE A PURE PYTHON MODULE (no BedrockAgentCoreApp, no app.run())
+✅ Ensure the system prompt is tailored based on the agentplan and as well the requirements, dont use the same one which is provided as an example
 
 """
     plan: AgentPlan = dspy.InputField(
