@@ -178,8 +178,6 @@ jobs:
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:${{ github.sha }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:latest
-          build-args: |
-            NEXT_PUBLIC_API_URL=${{ secrets.FASTAPI_BACKEND }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
