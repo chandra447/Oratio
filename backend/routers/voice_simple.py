@@ -204,36 +204,45 @@ class SimpleNovaSonic:
     def _initialize_client(self):
         """Initialize the Bedrock client with proper credential resolution.
         
-        Uses a custom credential chain optimized for ECS/local environments:
-        - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) for local dev
-        - ECS Task Role credentials via container metadata endpoint for production
+        Uses boto3 session to get credentials which works reliably in both:
+        - Local dev (environment variables or AWS CLI config)
+        - ECS (task role via container metadata)
         """
-        from smithy_aws_core.identity.chain import ChainedIdentityResolver
-        from smithy_aws_core.identity.environment import EnvironmentCredentialsResolver
-        from smithy_aws_core.identity.container import ContainerCredentialsResolver
-        from smithy_http.aio.aiohttp import AIOHTTPClient
+        import os
+        from smithy_aws_core.identity.static import StaticCredentialsResolver
         
-        # Create HTTP client for credential resolution (needed by ContainerCredentialsResolver)
-        http_client = AIOHTTPClient()
+        # Debug: Check what credential sources are available
+        logger.info(f"[NovaSonic] Checking credential sources:")
+        logger.info(f"  - AWS_ACCESS_KEY_ID present: {bool(os.getenv('AWS_ACCESS_KEY_ID'))}")
+        logger.info(f"  - AWS_CONTAINER_CREDENTIALS_RELATIVE_URI present: {bool(os.getenv('AWS_CONTAINER_CREDENTIALS_RELATIVE_URI'))}")
+        logger.info(f"  - Region: {settings.AWS_REGION}")
         
-        # Create custom credential chain that tries in order:
-        # 1. Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) - for local dev
-        # 2. ECS container credentials (via AWS_CONTAINER_CREDENTIALS_RELATIVE_URI) - for ECS
-        # Note: We explicitly skip IMDS (EC2 metadata) to avoid connection errors in ECS Fargate
-        credentials_resolver = ChainedIdentityResolver(
-            resolvers=[
-                EnvironmentCredentialsResolver(),
-                ContainerCredentialsResolver(http_client=http_client),
-            ]
-        )
-        
-        config = Config(
-            region=settings.AWS_REGION,
-            aws_credentials_identity_resolver=credentials_resolver,
-            endpoint_uri=f"https://bedrock-runtime.{settings.AWS_REGION}.amazonaws.com",
-        )
-        self.client = BedrockRuntimeClient(config=config)
-        logger.info("[NovaSonic] Bedrock client initialized with ECS-optimized credential chain")
+        # Use boto3 to get credentials (handles ECS, environment, etc. automatically)
+        try:
+            session = boto3.Session()
+            credentials = session.get_credentials()
+            
+            if not credentials:
+                raise Exception("No AWS credentials found. Check ECS task role or environment variables.")
+            
+            frozen_creds = credentials.get_frozen_credentials()
+            logger.info(f"[NovaSonic] Retrieved credentials via boto3 (access_key: {frozen_creds.access_key[:10]}...)")
+            
+            # Create config with credentials AND resolver
+            config = Config(
+                region=settings.AWS_REGION,
+                aws_access_key_id=frozen_creds.access_key,
+                aws_secret_access_key=frozen_creds.secret_key,
+                aws_session_token=frozen_creds.token,  # Will be None for env vars, set for IAM role
+                aws_credentials_identity_resolver=StaticCredentialsResolver(),  # Required for SigV4
+                endpoint_uri=f"https://bedrock-runtime.{settings.AWS_REGION}.amazonaws.com",
+            )
+            self.client = BedrockRuntimeClient(config=config)
+            logger.info("[NovaSonic] Bedrock client initialized successfully with boto3 credentials")
+            
+        except Exception as e:
+            logger.error(f"[NovaSonic] Failed to initialize client: {e}")
+            raise
     
     async def send_event(self, event_json: str):
         """Send an event to the stream."""
