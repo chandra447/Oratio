@@ -7,16 +7,8 @@ import { getAccessToken, isTokenExpired, getRefreshToken, storeTokens, clearToke
 import { refreshToken as refreshTokenApi } from './auth';
 
 const getApiBaseUrl = () => {
-  // Check if running locally (localhost or 127.0.0.1)
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8000';
-    }
-  }
-  
-  // Production CloudFront URL
-  return 'https://d3cp7cujulcncl.cloudfront.net';
+  // Use environment variable (baked in at build time) or fallback to localhost for dev
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 };
 
 export interface ApiError {

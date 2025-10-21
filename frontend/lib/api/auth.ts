@@ -3,18 +3,8 @@
  * Handles user registration, login, token management, and profile operations.
  */
 
-// Auto-detect environment: localhost for dev, CloudFront for production
-const getApiBaseUrl = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:8000';
-    }
-  }
-  return 'https://d3cp7cujulcncl.cloudfront.net';
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// Use environment variable (baked in at build time) or fallback to localhost for dev
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export interface RegisterData {
   email: string;
