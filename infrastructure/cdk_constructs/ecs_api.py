@@ -88,12 +88,12 @@ class EcsApiConstruct(Construct):
                 secrets={
                     "COGNITO_CLIENT_ID": ecs.Secret.from_ssm_parameter(
                         ssm.StringParameter.from_string_parameter_name(
-                            self, "CognitoClientIdParam", parameter_name="/oratio/cognito/client_id"
+                            self, "CognitoClientIdParam", "/oratio/cognito/client_id"
                         )
                     ),
                     "COGNITO_USER_POOL_ID": ecs.Secret.from_ssm_parameter(
                         ssm.StringParameter.from_string_parameter_name(
-                            self, "CognitoUserPoolIdParam", parameter_name="/oratio/cognito/user_pool_id"
+                            self, "CognitoUserPoolIdParam", "/oratio/cognito/user_pool_id"
                         )
                     ),
                 },
