@@ -88,6 +88,22 @@ class EcsFrontendConstruct(Construct):
             timeout=Duration.seconds(5),
         )
 
+        # Grant ECR pull permissions to Task Execution Role
+        # This allows ECS to pull the Docker image from ECR
+        execution_role = svc.task_definition.execution_role
+        execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                ],
+                resources=["*"],
+            )
+        )
+
         # Cache policy for Next.js - no caching for dynamic content
         # Note: "Cookie" cannot be in header_behavior, use cookie_behavior instead
         cloudfront_cache_policy = cloudfront.CachePolicy(

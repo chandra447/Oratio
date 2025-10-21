@@ -106,6 +106,22 @@ class EcsApiConstruct(Construct):
         # Health check - FastAPI chat health endpoint
         svc.target_group.configure_health_check(path="/api/v1/chat/health", healthy_http_codes="200")
 
+        # Grant ECR pull permissions to Task Execution Role
+        # This allows ECS to pull the Docker image from ECR
+        execution_role = svc.task_definition.execution_role
+        execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                ],
+                resources=["*"],
+            )
+        )
+
         # Requested wide IAM access for the Task Role (scope down for prod)
         task_role = svc.task_definition.task_role
         task_role.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMReadOnlyAccess"))
