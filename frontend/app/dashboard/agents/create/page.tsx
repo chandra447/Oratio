@@ -68,7 +68,7 @@ export default function CreateAgentPage() {
       const path = (file as any).webkitRelativePath || file.name
       const parts = path.split("/")
 
-      parts.forEach((part, index) => {
+      parts.forEach((part: string, index: number) => {
         const isFile = index === parts.length - 1
         const fullPath = parts.slice(0, index + 1).join("/")
         const parentPath = index > 0 ? parts.slice(0, index).join("/") : null
@@ -275,7 +275,18 @@ export default function CreateAgentPage() {
       const fileDescriptions = collectFileDescriptions(fileTree)
 
       // Build agent data
-      const agentData = {
+      const agentData: {
+        agent_name: string
+        agent_type: "voice" | "text"
+        sop: string
+        knowledge_base_description: string
+        human_handoff_description: string
+        files: File[]
+        file_descriptions: Record<string, string>
+        voice_personality?: {
+          additional_instructions: string
+        }
+      } = {
         agent_name: agentName,
         agent_type: (selectedMode === "voice" ? "voice" : "text") as "voice" | "text",
         sop: sop,

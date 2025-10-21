@@ -10,9 +10,9 @@
  * @github: https://github.com/kokonut-labs/kokonutui
  */
 
-import { Mic } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { MicSparklesIcon } from "@/components/ui/mic-sparkles-icon";
 
 export default function AI_Voice() {
     const [submitted, setSubmitted] = useState(false);
@@ -96,7 +96,7 @@ export default function AI_Voice() {
                             style={{ animationDuration: "3s" }}
                         />
                     ) : (
-                        <Mic className="w-6 h-6 text-black/90 dark:text-white/90" />
+                        <MicSparklesIcon size={40} className="text-black/90 dark:text-white/90" />
                     )}
                 </button>
 

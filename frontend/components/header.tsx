@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Menu, Mic } from "lucide-react"
+import { Menu } from "lucide-react"
+import { MicSparklesIcon } from "@/components/ui/mic-sparkles-icon"
 
 export function Header() {
   return (
@@ -9,7 +10,7 @@ export function Header() {
         <div className="flex items-center gap-8">
           <Link href="/" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
-              <Mic className="h-5 w-5 text-accent-foreground" />
+              <MicSparklesIcon size={40} className="text-accent-foreground" />
             </div>
             <span className="text-xl font-bold text-wider" style={{ fontFamily: 'Audiowide, sans-serif' }}>Oratio</span>
           </Link>
@@ -21,18 +22,13 @@ export function Header() {
             >
               Features
             </Link>
-            <Link
+            {/* <Link
               href="#use-cases"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Use Cases
-            </Link>
-            <Link
-              href="#"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Documentation
-            </Link>
+            </Link> */}
+   
           </nav>
         </div>
 

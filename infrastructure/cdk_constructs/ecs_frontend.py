@@ -65,6 +65,10 @@ class EcsFrontendConstruct(Construct):
             certificate=certificate,
             redirect_http=True if certificate else False,
             protocol=elbv2.ApplicationProtocol.HTTPS if certificate else elbv2.ApplicationProtocol.HTTP,
+            runtime_platform=ecs.RuntimePlatform(
+                operating_system_family=ecs.OperatingSystemFamily.LINUX,
+                cpu_architecture=ecs.CpuArchitecture.ARM64,
+            ),
             task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
                 image=ecs.ContainerImage.from_registry(resolved_image_uri),
                 container_port=3000,

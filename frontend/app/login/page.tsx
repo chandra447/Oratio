@@ -7,9 +7,10 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Mic, ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/lib/auth/auth-context"
+import { MicSparklesIcon } from "@/components/ui/mic-sparkles-icon"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -55,7 +56,7 @@ export default function LoginPage() {
         <div className="flex justify-center mb-8">
           <Link href="/" className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center">
-              <Mic className="h-6 w-6 text-accent-foreground" />
+              <MicSparklesIcon size={24} className="text-accent-foreground" />
             </div>
             <span className="text-2xl font-bold" style={{ fontFamily: 'Audiowide, sans-serif' }} >Oratio</span>
           </Link>

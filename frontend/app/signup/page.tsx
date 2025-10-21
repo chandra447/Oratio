@@ -8,9 +8,10 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Mic, ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 import { useAuth } from "@/lib/auth/auth-context"
+import { MicSparklesIcon } from "@/components/ui/mic-sparkles-icon"
 
 export default function SignupPage() {
   const [name, setName] = useState("")
@@ -132,7 +133,7 @@ export default function SignupPage() {
         <div className="flex justify-center mb-8">
           <Link href="/" className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center">
-              <Mic className="h-6 w-6 text-accent-foreground" />
+              <MicSparklesIcon size={40} className="text-accent-foreground" />
             </div>
             <span className="text-2xl font-bold">Oratio</span>
           </Link>

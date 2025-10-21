@@ -1,9 +1,10 @@
 "use client"
 import type React from "react"
-import { IconRobot, IconDatabase, IconKey, IconLogout, IconMicrophone, IconSparkles } from "@tabler/icons-react"
+import { IconRobot, IconDatabase, IconKey, IconLogout } from "@tabler/icons-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { MicSparklesIcon } from "@/components/ui/mic-sparkles-icon"
 
 export default function DashboardLayout({
   children,
@@ -49,8 +50,7 @@ export default function DashboardLayout({
         {/* Logo */}
         <Link href="/dashboard/agents" className="group">
           <div className="h-10 w-10 shrink-0 rounded-xl bg-accent flex items-center justify-center relative transition-transform hover:scale-105">
-            <IconMicrophone className="h-5 w-5 text-white relative z-10" />
-            <IconSparkles className="h-3 w-3 text-white/80 absolute -top-0.5 -right-0.5" />
+            <MicSparklesIcon size={40} className="text-white" />
           </div>
         </Link>
 

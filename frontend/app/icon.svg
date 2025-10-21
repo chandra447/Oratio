@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4f46e5;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="micGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e0e7ff;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Vibrant gradient background -->
+  <rect width="100" height="100" fill="url(#bgGradient)" rx="20"/>
+  
+  <!-- Microphone body - white/light color for contrast -->
+  <rect x="38" y="22" width="24" height="36" rx="12" fill="url(#micGradient)"/>
+  
+  <!-- Microphone stand -->
+  <path d="M 33 63 Q 33 72 50 72 Q 67 72 67 63" stroke="white" stroke-width="4" fill="none"/>
+  <line x1="50" y1="72" x2="50" y2="80" stroke="white" stroke-width="4"/>
+  <line x1="38" y1="80" x2="62" y2="80" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  
+  <!-- Microphone arc -->
+  <path d="M 28 50 Q 28 63 50 63 Q 72 63 72 50" stroke="white" stroke-width="3.5" fill="none"/>
+  
+  <!-- Sparkles - bright yellow/gold -->
+  <g fill="#fbbf24">
+    <!-- Top right sparkle -->
+    <circle cx="74" cy="26" r="3"/>
+    <line x1="74" y1="19" x2="74" y2="33" stroke="#fbbf24" stroke-width="2.5"/>
+    <line x1="67" y1="26" x2="81" y2="26" stroke="#fbbf24" stroke-width="2.5"/>
+    
+    <!-- Top left sparkle -->
+    <circle cx="23" cy="30" r="2.5"/>
+    <line x1="23" y1="23" x2="23" y2="37" stroke="#fbbf24" stroke-width="2"/>
+    <line x1="16" y1="30" x2="30" y2="30" stroke="#fbbf24" stroke-width="2"/>
+    
+    <!-- Bottom right sparkle -->
+    <circle cx="77" cy="60" r="2.5"/>
+    <line x1="77" y1="53" x2="77" y2="67" stroke="#fbbf24" stroke-width="2"/>
+    <line x1="70" y1="60" x2="84" y2="60" stroke="#fbbf24" stroke-width="2"/>
+  </g>
+</svg>
+

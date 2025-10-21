@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { Github, Twitter, Linkedin, Youtube, Mic } from "lucide-react"
+import { Github, Twitter, Linkedin, Youtube } from "lucide-react"
+import { MicSparklesIcon } from "@/components/ui/mic-sparkles-icon"
 
 export function Footer() {
   return (
@@ -9,7 +10,7 @@ export function Footer() {
           <div className="lg:col-span-2">
             <Link href="/" className="mb-4 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent">
-                <Mic className="h-4 w-4 text-accent-foreground" />
+                <MicSparklesIcon size={16} className="text-accent-foreground" />
               </div>
               <span className="text-xl font-bold">Oratio</span>
             </Link>

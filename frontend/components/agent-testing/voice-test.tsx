@@ -4,8 +4,9 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Phone, PhoneOff, Mic, Volume2, Loader2 } from "lucide-react"
-import { connectVoiceAgent, sendAudioChunk, endVoiceSession, type VoiceMessage } from "@/lib/api/voice"
+import { Phone, PhoneOff, Volume2, Loader2 } from "lucide-react"
+import { connectVoiceAgent, sendAudioChunk, endVoiceSession, type VoiceMessage as VoiceAPIMessage } from "@/lib/api/voice"
+import { MicSparklesIcon } from "@/components/ui/mic-sparkles-icon"
 
 interface VoiceMessage {
   role: "user" | "assistant"
@@ -196,7 +197,7 @@ export function VoiceTest({ agentId, apiKey }: VoiceTestProps) {
         console.log("[Voice] 📥 Received message:", event.data.substring(0, 100))
 
         try {
-          const message: VoiceMessage = JSON.parse(event.data)
+          const message: VoiceAPIMessage = JSON.parse(event.data)
           console.log("[Voice] 📥 Received message:", message.type, message)
 
           switch (message.type) {
@@ -429,7 +430,7 @@ export function VoiceTest({ agentId, apiKey }: VoiceTestProps) {
         {isVoiceActive && (
           <div className="mt-4 flex gap-4">
             <Badge variant={isRecording ? "default" : "secondary"} className="gap-1">
-              <Mic className="w-3 h-3" />
+              <MicSparklesIcon size={12} />
               {isRecording ? "Recording" : "Paused"}
             </Badge>
             <Badge variant={isPlayingRef.current ? "default" : "secondary"} className="gap-1">

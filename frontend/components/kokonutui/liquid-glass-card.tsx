@@ -14,7 +14,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { ArrowLeft, ArrowRight, Pause, Play } from "lucide-react";
 import Image from "next/image";
 import React from "react";
-import { Button, type ButtonProps } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -91,7 +91,7 @@ const liquidButtonVariants = cva("relative transition-transform duration-300", {
   },
 });
 
-export type LiquidButtonProps = ButtonProps & {
+export type LiquidButtonProps = React.ComponentProps<typeof Button> & {
   liquidVariant?: "default" | "none";
 };
 
