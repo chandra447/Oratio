@@ -175,7 +175,8 @@ jobs:
           file: ./frontend/Dockerfile.prod
           platforms: linux/arm64
           push: true
-
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.FASTAPI_BACKEND }}
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:${{ github.sha }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:latest
@@ -210,6 +211,13 @@ jobs:
           CDK_DEFAULT_ACCOUNT: ${{ secrets.AWS_ACCOUNT_ID }}
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           ENVIRONMENT: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
+      
+      # Step 7b: Invalidate CloudFront cache after frontend deployment
+      - name: Invalidate CloudFront cache
+        if: steps.changes.outputs.frontend == 'true' || inputs.force_docker_build
+        run: |
+          chmod +x ./scripts/invalidate_cloudfront.sh
+          ./scripts/invalidate_cloudfront.sh
       
       # Step 8: Export IAM Role ARNs from CloudFormation
       - name: Export IAM Role ARNs

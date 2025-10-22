@@ -96,10 +96,10 @@ class OratioStack(Stack):
             alb_dns_name=self.api.load_balancer.load_balancer_dns_name,
         )
 
+        # Frontend - API URL is baked into Docker image at build time
         self.frontend = EcsFrontendConstruct(
             self,
             "Frontend",
-            backend_api_url=f"https://{self.api_cdn.domain_name}",
         )
 
         # Export IAM role ARNs for use in GitHub Actions

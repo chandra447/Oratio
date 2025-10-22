@@ -25,7 +25,6 @@ class EcsFrontendConstruct(Construct):
         scope: Construct,
         construct_id: str,
         *,
-        backend_api_url: str,
         image_uri: str | None = None,
         domain_name: str | None = None,
         hosted_zone_name: str | None = None,
@@ -34,10 +33,7 @@ class EcsFrontendConstruct(Construct):
         super().__init__(scope, construct_id, **kwargs)
         stack = Stack.of(self)
         
-        # Validate backend API URL format
-        import re
-        if not re.match(r'^https?://[^ ]+$', backend_api_url):
-            raise ValueError(f"Invalid backend_api_url format: {backend_api_url}. Must be a valid HTTP/HTTPS URL.")
+        # Note: API URL is now baked into the Docker image at build time via NEXT_PUBLIC_API_URL build arg
 
         vpc = ec2.Vpc(self, "FrontendVpc", nat_gateways=1)
         cluster = ecs.Cluster(self, "FrontendCluster", vpc=vpc)
@@ -110,7 +106,7 @@ class EcsFrontendConstruct(Construct):
             )
         )
 
-        # Cache policy for Next.js - no caching for dynamic content
+        # Cache policy for Next.js dynamic pages - no caching
         # Note: "Cookie" cannot be in header_behavior, use cookie_behavior instead
         cloudfront_cache_policy = cloudfront.CachePolicy(
             self,
@@ -122,6 +118,19 @@ class EcsFrontendConstruct(Construct):
             cookie_behavior=cloudfront.CacheCookieBehavior.all(),
             header_behavior=cloudfront.CacheHeaderBehavior.allow_list("Authorization"),
             query_string_behavior=cloudfront.CacheQueryStringBehavior.all(),
+        )
+
+        # Cache policy for Next.js static assets - aggressive caching with versioned URLs
+        static_cache_policy = cloudfront.CachePolicy(
+            self,
+            "FrontendStaticCachePolicy",
+            cache_policy_name="oratio-frontend-static-cache",
+            default_ttl=Duration.days(365),
+            min_ttl=Duration.days(365),
+            max_ttl=Duration.days(365),
+            cookie_behavior=cloudfront.CacheCookieBehavior.none(),
+            header_behavior=cloudfront.CacheHeaderBehavior.none(),
+            query_string_behavior=cloudfront.CacheQueryStringBehavior.none(),
         )
 
         # Origin request policy to forward headers and cookies to Next.js
@@ -153,12 +162,27 @@ class EcsFrontendConstruct(Construct):
                 origin_request_policy=origin_request_policy,
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
             ),
+            additional_behaviors={
+                # Cache Next.js static assets aggressively (they have versioned URLs)
+                "/_next/static/*": cloudfront.BehaviorOptions(
+                    origin=origins.HttpOrigin(
+                        domain_name=svc.load_balancer.load_balancer_dns_name,
+                        protocol_policy=cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+                    ),
+                    allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+                    cache_policy=static_cache_policy,
+                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                    compress=True,
+                ),
+            },
         )
 
         self.cloudfront_domain = distribution.domain_name
+        self.distribution_id = distribution.distribution_id
 
         CfnOutput(self, "FrontendAlbDns", value=svc.load_balancer.load_balancer_dns_name)
         CfnOutput(self, "FrontendCloudFrontDomain", value=self.cloudfront_domain)
+        CfnOutput(self, "FrontendDistributionId", value=self.distribution_id)
 
         if domain_name and zone and certificate:
             route53.ARecord(
