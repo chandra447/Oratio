@@ -60,7 +60,7 @@ graph TB
         C[AWS Cognito Auth]
     end
     
-    subgraph "Agent Creation Pipeline"
+    subgraph "Agent Creation Pipeline "
         D[Step Functions Workflow]
         E[AgentCreator Meta-Agent]
         F[Knowledge Base Provisioner]
@@ -85,17 +85,19 @@ graph TB
     A -->|Create Agent| B
     B -->|Authenticate| C
     B -->|Trigger| D
-    D -->|Invoke| E
-    D -->|Provision KB| F
-    E -->|Store Code| H
+    D -->|Invoke| F
+    F -->|Pass New KB ID| E
+    E -->|Store New Code| H
     E -->|Store Metadata| G
     F -->|Create KB| I
     
-    L -->|Chat Request| J
-    M -->|Voice Request| J
+    L -->|Chat Request| B
+    M -->|Voice Request| B
+    B -->|Invoke Bedrock AgentCore| J
     J -->|Load Code| H
     J -->|Load Memory| K
     J -->|Query KB| I
+    B --> |Backed db's| G
 ```
 
 ### **Key Innovation: Chameleon Architecture**
