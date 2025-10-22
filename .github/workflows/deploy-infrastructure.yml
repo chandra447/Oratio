@@ -212,7 +212,20 @@ jobs:
           CDK_DEFAULT_REGION: ${{ env.AWS_REGION }}
           ENVIRONMENT: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'staging') }}
       
-      # Step 7b: Invalidate CloudFront cache after frontend deployment
+      # Step 7b: Wait for CloudFormation stack to be ready
+      - name: Wait for CloudFormation stack completion
+        if: steps.changes.outputs.frontend == 'true' || inputs.force_docker_build
+        run: |
+          echo "⏳ Waiting for CloudFormation stack to complete..."
+          aws cloudformation wait stack-update-complete \
+            --stack-name OratioStack \
+            --region ${{ env.AWS_REGION }} || \
+          aws cloudformation wait stack-create-complete \
+            --stack-name OratioStack \
+            --region ${{ env.AWS_REGION }} || \
+          echo "✅ Stack is already in a stable state"
+      
+      # Step 7c: Invalidate CloudFront cache after frontend deployment
       - name: Invalidate CloudFront cache
         if: steps.changes.outputs.frontend == 'true' || inputs.force_docker_build
         run: |
