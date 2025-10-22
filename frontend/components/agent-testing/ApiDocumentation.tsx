@@ -301,6 +301,193 @@ if __name__ == "__main__":
     asyncio.run(client.run())
 `
 
+  const streamlitVoiceExample = `import streamlit as st
+import asyncio
+import websockets
+import json
+import pyaudio
+import threading
+from queue import Queue
+
+# Configuration
+API_KEY = st.secrets["ORATIO_API_KEY"]
+AGENT_ID = "${agentId}"
+WS_ENDPOINT = "${apiEndpoint.replace('https://', 'wss://').replace('http://', 'ws://')}/voice"
+
+# Audio configuration
+CHUNK_SIZE = 1024
+FORMAT = pyaudio.paInt16
+CHANNELS = 1
+INPUT_RATE = 16000
+OUTPUT_RATE = 24000
+
+# Initialize session state
+if "voice_active" not in st.session_state:
+    st.session_state.voice_active = False
+if "transcripts" not in st.session_state:
+    st.session_state.transcripts = []
+if "session_id" not in st.session_state:
+    st.session_state.session_id = "streamlit_voice_001"
+
+class StreamlitVoiceAgent:
+    """Voice agent for Streamlit with real-time audio streaming"""
+    
+    def __init__(self):
+        self.ws = None
+        self.audio = pyaudio.PyAudio()
+        self.audio_queue = Queue()
+        self.is_running = False
+        
+    async def connect(self):
+        """Connect to voice agent"""
+        actor_id = "streamlit_user"
+        session_id = st.session_state.session_id
+        url = f"{WS_ENDPOINT}/{AGENT_ID}/{actor_id}/{session_id}?api_key={API_KEY}"
+        
+        self.ws = await websockets.connect(url)
+        
+        # Wait for ready signal
+        ready_msg = await self.ws.recv()
+        ready_data = json.loads(ready_msg)
+        if ready_data.get("type") == "ready":
+            return True
+        return False
+    
+    async def send_audio_loop(self):
+        """Send audio from microphone"""
+        stream = self.audio.open(
+            format=FORMAT,
+            channels=CHANNELS,
+            rate=INPUT_RATE,
+            input=True,
+            frames_per_buffer=CHUNK_SIZE
+        )
+        
+        await self.ws.send("start_audio")
+        
+        try:
+            while self.is_running:
+                data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                await self.ws.send(data)
+                await asyncio.sleep(0.01)
+        finally:
+            stream.stop_stream()
+            stream.close()
+            await self.ws.send("stop_audio")
+    
+    async def receive_loop(self):
+        """Receive audio and transcripts"""
+        output_stream = self.audio.open(
+            format=FORMAT,
+            channels=CHANNELS,
+            rate=OUTPUT_RATE,
+            output=True
+        )
+        
+        try:
+            async for message in self.ws:
+                if not self.is_running:
+                    break
+                    
+                if isinstance(message, bytes):
+                    # Play audio
+                    output_stream.write(message)
+                else:
+                    data = json.loads(message)
+                    
+                    if data.get("type") == "transcript":
+                        role = data.get("role", "unknown")
+                        content = data.get("content", "")
+                        st.session_state.transcripts.append({
+                            "role": role,
+                            "content": content
+                        })
+                        # Trigger rerun to update UI
+                        st.rerun()
+        finally:
+            output_stream.stop_stream()
+            output_stream.close()
+    
+    async def run(self):
+        """Run the voice agent"""
+        connected = await self.connect()
+        if not connected:
+            return False
+            
+        self.is_running = True
+        
+        try:
+            await asyncio.gather(
+                self.send_audio_loop(),
+                self.receive_loop()
+            )
+        finally:
+            self.is_running = False
+            if self.ws:
+                await self.ws.close()
+        
+        return True
+
+def run_voice_agent():
+    """Run voice agent in background thread"""
+    agent = StreamlitVoiceAgent()
+    asyncio.run(agent.run())
+
+# Streamlit UI
+st.title("🎙️ ${agent.agent_name} - Voice Chat")
+st.caption("Powered by Oratio Voice Agents")
+
+# Control buttons
+col1, col2 = st.columns([1, 4])
+
+with col1:
+    if st.button("🎤 Start" if not st.session_state.voice_active else "🛑 Stop", 
+                 type="primary" if not st.session_state.voice_active else "secondary"):
+        if not st.session_state.voice_active:
+            st.session_state.voice_active = True
+            st.session_state.transcripts = []
+            # Start voice agent in background
+            thread = threading.Thread(target=run_voice_agent, daemon=True)
+            thread.start()
+            st.success("Voice agent started! Speak into your microphone.")
+        else:
+            st.session_state.voice_active = False
+            st.info("Voice agent stopped.")
+
+with col2:
+    if st.session_state.voice_active:
+        st.info("🎤 Listening... The agent is active and processing your voice.")
+
+# Display transcripts
+st.subheader("Conversation")
+
+if st.session_state.transcripts:
+    for transcript in st.session_state.transcripts:
+        role = transcript["role"]
+        content = transcript["content"]
+        
+        if role == "user":
+            with st.chat_message("user"):
+                st.write(content)
+        else:
+            with st.chat_message("assistant"):
+                st.write(content)
+else:
+    st.info("No conversation yet. Click 'Start' and speak into your microphone.")
+
+# Instructions
+with st.expander("ℹ️ How to use"):
+    st.markdown("""
+    1. Click the **Start** button to begin the voice session
+    2. Allow microphone access when prompted
+    3. Speak naturally - the agent will respond with voice and text
+    4. The conversation will appear below in real-time
+    5. Click **Stop** when you're done
+    
+    **Note:** Make sure you have a working microphone connected to your device.
+    """)
+`
+
   const jsVoiceExample = `// Configuration
 const API_KEY = "your_api_key_here";
 const AGENT_ID = "${agentId}";
@@ -676,7 +863,7 @@ curl -X POST "${apiEndpoint}/chat/${agentId}/user_123/session_456" \\
               </div>
 
               <Tabs defaultValue="python" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-neutral-900/50 border border-neutral-800/50">
+                <TabsList className="grid w-full grid-cols-3 bg-neutral-900/50 border border-neutral-800/50">
                   <TabsTrigger value="python" className="flex items-center gap-2">
                     <LanguageIcon language="python" />
                     <span>Python</span>
@@ -684,6 +871,10 @@ curl -X POST "${apiEndpoint}/chat/${agentId}/user_123/session_456" \\
                   <TabsTrigger value="javascript" className="flex items-center gap-2">
                     <LanguageIcon language="javascript" />
                     <span>JavaScript</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="streamlit" className="flex items-center gap-2">
+                    <LanguageIcon language="python" />
+                    <span>Streamlit</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -706,6 +897,24 @@ curl -X POST "${apiEndpoint}/chat/${agentId}/user_123/session_456" \\
                     language="javascript"
                     title="voice_agent.js"
                   />
+                </TabsContent>
+
+                <TabsContent value="streamlit" className="mt-4 space-y-3">
+                  <CodeBlock
+                    code={streamlitVoiceExample}
+                    language="python"
+                    title="streamlit_voice_app.py"
+                  />
+                  <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                    <p className="text-xs text-blue-200">
+                      <strong>Dependencies:</strong> <code className="px-1.5 py-0.5 rounded bg-neutral-900 text-accent ml-1">pip install streamlit websockets pyaudio</code>
+                    </p>
+                  </div>
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                    <p className="text-xs text-yellow-200">
+                      <strong>Note:</strong> Streamlit's threading model may have limitations with real-time audio. For production use, consider using the standalone Python example or JavaScript for web applications.
+                    </p>
+                  </div>
                 </TabsContent>
               </Tabs>
             </div>
