@@ -23,8 +23,12 @@ export function testApiConfig() {
     console.log('window.NEXT_PUBLIC_API_URL:', window.NEXT_PUBLIC_API_URL);
   }
   
-  // Check build-time config
-  console.log('Build-time API URL:', process.env.NEXT_PUBLIC_API_URL);
+  // Check build-time config (only available on server-side)
+  if (typeof window === 'undefined') {
+    console.log('Build-time API URL (SSR):', process.env.NEXT_PUBLIC_API_URL);
+  } else {
+    console.log('Build-time API URL: Not available in browser (would be inlined by Next.js)');
+  }
   
   // Get the resolved base URL
   const baseUrl = getApiBaseUrl();
@@ -40,7 +44,7 @@ export function testApiConfig() {
     isBrowser: typeof window !== 'undefined',
     runtimeConfigAvailable: isRuntimeConfigAvailable(),
     runtimeUrl: typeof window !== 'undefined' ? window.NEXT_PUBLIC_API_URL : undefined,
-    buildTimeUrl: process.env.NEXT_PUBLIC_API_URL,
+    buildTimeUrl: typeof window === 'undefined' ? process.env.NEXT_PUBLIC_API_URL : 'Inlined by Next.js',
     resolvedUrl: baseUrl,
     sampleUrl
   };

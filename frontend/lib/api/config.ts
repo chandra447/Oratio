@@ -17,35 +17,47 @@ function isValidUrl(url: string): boolean {
 }
 
 /**
- * Get the API base URL from runtime config or build-time environment variable.
- * This function checks multiple sources in order of precedence:
+ * Get the API base URL from runtime config.
+ * This function ONLY reads from window.NEXT_PUBLIC_API_URL to avoid Next.js build-time inlining.
+ *
+ * For client-side code:
  * 1. Runtime config injected by docker-entrypoint.sh (window.NEXT_PUBLIC_API_URL)
- * 2. Build-time environment variable (process.env.NEXT_PUBLIC_API_URL)
- * 3. Fallback to localhost for local development
+ * 2. Fallback to localhost for local development
+ *
+ * For server-side code (SSR):
+ * 1. Build-time environment variable (process.env.NEXT_PUBLIC_API_URL)
+ * 2. Fallback to localhost for local development
  */
 export function getApiBaseUrl(): string {
-  // Check for runtime config first (injected by docker-entrypoint.sh in production)
-  if (isRuntimeConfigAvailable()) {
-    const runtimeUrl = (window as any).NEXT_PUBLIC_API_URL;
-    if (runtimeUrl && runtimeUrl !== '__PLACEHOLDER__' && isValidUrl(runtimeUrl)) {
-      return runtimeUrl;
+  // Client-side: Only use runtime config from window
+  if (typeof window !== 'undefined') {
+    if (isRuntimeConfigAvailable()) {
+      const runtimeUrl = (window as any).NEXT_PUBLIC_API_URL;
+      if (runtimeUrl && runtimeUrl !== '__PLACEHOLDER__' && isValidUrl(runtimeUrl)) {
+        return runtimeUrl;
+      }
+      
+      if (!isValidUrl(runtimeUrl)) {
+        console.warn(`Invalid runtime API URL: ${runtimeUrl}. Using fallback.`);
+      }
     }
     
-    if (!isValidUrl(runtimeUrl)) {
-      console.warn(`Invalid runtime API URL: ${runtimeUrl}. Falling back to build-time configuration.`);
-    }
+    // Client-side fallback to localhost for development
+    const fallbackUrl = 'http://localhost:8000';
+    console.warn(`Runtime API URL not available or invalid. Using fallback: ${fallbackUrl}`);
+    return fallbackUrl;
   }
   
-  // Fallback to build-time environment variable
+  // Server-side: Use build-time environment variable (only runs on server)
   const buildTimeUrl = process.env.NEXT_PUBLIC_API_URL;
   if (buildTimeUrl && isValidUrl(buildTimeUrl)) {
     return buildTimeUrl;
   }
   
-  // Final fallback to localhost for development
+  // Server-side fallback
   const fallbackUrl = 'http://localhost:8000';
   if (!buildTimeUrl) {
-    console.warn(`No API URL configured. Using fallback: ${fallbackUrl}`);
+    console.warn(`No API URL configured for SSR. Using fallback: ${fallbackUrl}`);
   } else {
     console.warn(`Invalid build-time API URL: ${buildTimeUrl}. Using fallback: ${fallbackUrl}`);
   }
