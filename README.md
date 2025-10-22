@@ -142,10 +142,11 @@ sequenceDiagram
     participant UI as Dashboard
     participant API as Backend API
     participant SF as Step Functions
-    participant AC as AgentCreator
+    participant ACL as AgentCreator
     participant KB as KB Provisioner
     participant S3 as S3 Storage
     participant DB as DynamoDB
+    participant AC as Bedrock AgentCore
 
     User->>UI: Upload SOP + Documents
     UI->>API: POST /agents
@@ -157,12 +158,14 @@ sequenceDiagram
     KB->>S3: Index Documents
     KB-->>SF: KB ARN
     
-    SF->>AC: Generate Agent Code
+    SF->>ACL: Generate Agent Code
+    ACL->> AC: Invoke bedrockAgentcore
     AC->>AC: Parse SOP
     AC->>AC: Design Architecture
     AC->>AC: Generate Strands Code
     AC->>AC: Review & Validate
-    AC->>S3: Store agent_file.py
+    AC->>ACL: Retrun agent.py
+    ACL->>S3: Store agent_file.py
     AC-->>SF: Success
     
     SF->>DB: Update Agent Status
@@ -211,9 +214,9 @@ sequenceDiagram
     participant KB as Knowledge Base
     participant Mem as Memory
 
-    Customer->>API: POST /chat/{agent_id}
+    Customer->>API: POST /chat/{agent_id}/{session_id}
     API->>Cham: Invoke Agent
-    Cham->>S3: Load agent_file.py
+    Cham->>S3: Retrieve agent_file.py
     Cham->>Mem: Load Conversation History
     Cham->>Agent: Execute with Context
     Agent->>KB: Retrieve Information
@@ -232,16 +235,16 @@ sequenceDiagram
     participant Customer as End Customer
     participant Voice as Voice Service
     participant Nova as Nova Sonic
-    participant Cham as Chameleon
-    participant Agent as Strands Agent
+    participant Cham as Chameleon 
+    participant Agent as Strands Agent as tool {agent_id}
 
-    Customer->>Voice: WebSocket Connect
+    Customer->>Voice: ws://{agent_id}/{session_id}
     Voice->>Nova: Start Session
     
     loop Conversation
         Customer->>Voice: Audio Stream
         Voice->>Nova: Audio Input
-        Nova->>Nova: Transcribe Speech
+     
         
         alt Needs Business Logic
             Nova->>Cham: Invoke Agent Tool
