@@ -79,7 +79,6 @@ class EcsFrontendConstruct(Construct):
                 image=ecs.ContainerImage.from_registry(resolved_image_uri),
                 container_port=3000,
                 environment={
-                    "NEXT_PUBLIC_ENV": "aws",
                     "NODE_ENV": "production",
                 },
             ),

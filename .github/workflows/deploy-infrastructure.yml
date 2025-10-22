@@ -175,8 +175,7 @@ jobs:
           file: ./frontend/Dockerfile.prod
           platforms: linux/arm64
           push: true
-          build-args: |
-            NEXT_PUBLIC_ENV=aws
+
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:${{ github.sha }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_FRONTEND_REPO }}:latest

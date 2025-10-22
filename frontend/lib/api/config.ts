@@ -1,20 +1,12 @@
 /**
- * Centralized API configuration using NEXT_PUBLIC_ENV
+ * Centralized API configuration - hardcoded to production URL
  */
 
 /**
- * Get the API base URL based on NEXT_PUBLIC_ENV environment variable
+ * Get the API base URL - always returns the production URL
  */
 export function getApiBaseUrl(): string {
-  const env = process.env.NEXT_PUBLIC_ENV || 'local';
-  
-  switch (env) {
-    case 'aws':
-      return 'https://d3cp7cujulcncl.cloudfront.net';
-    case 'local':
-    default:
-      return 'http://localhost:8000';
-  }
+  return 'https://d3cp7cujulcncl.cloudfront.net';
 }
 
 /**
