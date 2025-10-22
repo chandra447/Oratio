@@ -328,21 +328,23 @@ if "transcripts" not in st.session_state:
     st.session_state.transcripts = []
 if "session_id" not in st.session_state:
     st.session_state.session_id = "streamlit_voice_001"
+if "transcripts_queue" not in st.session_state:
+    st.session_state.transcripts_queue = Queue()
 
 class StreamlitVoiceAgent:
     """Voice agent for Streamlit with real-time audio streaming"""
     
-    def __init__(self):
+    def __init__(self, session_id, transcripts_queue):
+        self.session_id = session_id
+        self.transcripts_queue = transcripts_queue
         self.ws = None
         self.audio = pyaudio.PyAudio()
-        self.audio_queue = Queue()
         self.is_running = False
         
     async def connect(self):
         """Connect to voice agent"""
         actor_id = "streamlit_user"
-        session_id = st.session_state.session_id
-        url = f"{WS_ENDPOINT}/{AGENT_ID}/{actor_id}/{session_id}?api_key={API_KEY}"
+        url = f"{WS_ENDPOINT}/{AGENT_ID}/{actor_id}/{self.session_id}?api_key={API_KEY}"
         
         self.ws = await websockets.connect(url)
         
@@ -398,12 +400,11 @@ class StreamlitVoiceAgent:
                     if data.get("type") == "transcript":
                         role = data.get("role", "unknown")
                         content = data.get("content", "")
-                        st.session_state.transcripts.append({
+                        # Put transcript in queue instead of accessing session_state
+                        self.transcripts_queue.put({
                             "role": role,
                             "content": content
                         })
-                        # Trigger rerun to update UI
-                        st.rerun()
         finally:
             output_stream.stop_stream()
             output_stream.close()
@@ -428,9 +429,9 @@ class StreamlitVoiceAgent:
         
         return True
 
-def run_voice_agent():
+def run_voice_agent(session_id, transcripts_queue):
     """Run voice agent in background thread"""
-    agent = StreamlitVoiceAgent()
+    agent = StreamlitVoiceAgent(session_id, transcripts_queue)
     asyncio.run(agent.run())
 
 # Streamlit UI
@@ -446,8 +447,13 @@ with col1:
         if not st.session_state.voice_active:
             st.session_state.voice_active = True
             st.session_state.transcripts = []
-            # Start voice agent in background
-            thread = threading.Thread(target=run_voice_agent, daemon=True)
+            st.session_state.transcripts_queue = Queue()
+            # Start voice agent in background with session_id and queue
+            thread = threading.Thread(
+                target=run_voice_agent, 
+                args=(st.session_state.session_id, st.session_state.transcripts_queue),
+                daemon=True
+            )
             thread.start()
             st.success("Voice agent started! Speak into your microphone.")
         else:
@@ -457,6 +463,20 @@ with col1:
 with col2:
     if st.session_state.voice_active:
         st.info("🎤 Listening... The agent is active and processing your voice.")
+
+# Poll the queue for new transcripts (non-blocking)
+while not st.session_state.transcripts_queue.empty():
+    try:
+        transcript = st.session_state.transcripts_queue.get_nowait()
+        st.session_state.transcripts.append(transcript)
+    except:
+        break
+
+# Auto-refresh when active to check for new transcripts
+if st.session_state.voice_active:
+    import time
+    time.sleep(0.5)
+    st.rerun()
 
 # Display transcripts
 st.subheader("Conversation")
