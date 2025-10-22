@@ -179,24 +179,24 @@ if prompt := st.chat_input("What would you like to know?"):
 import websockets
 import json
 import pyaudio
-import base64
 
 # Configuration
 API_KEY = "your_api_key_here"
 AGENT_ID = "${agentId}"
 WS_ENDPOINT = "${apiEndpoint.replace('https://', 'wss://').replace('http://', 'ws://')}/voice"
 
-# Audio configuration
+# Audio configuration (16kHz PCM16 mono for input)
 CHUNK_SIZE = 1024
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
-RATE = 16000  # 16kHz sample rate
+INPUT_RATE = 16000   # Input: 16kHz
+OUTPUT_RATE = 24000  # Output: 24kHz
 
 class VoiceClient:
     def __init__(self):
         self.audio = pyaudio.PyAudio()
         self.websocket = None
-        self.is_recording = False
+        self.is_running = False
         
     async def connect(self):
         """Connect to the voice agent"""
@@ -208,72 +208,97 @@ class VoiceClient:
         print("Connected to voice agent!")
         
         # Wait for ready signal
-        ready = await self.websocket.recv()
-        print(f"Agent ready: {ready}")
+        ready_msg = await self.websocket.recv()
+        ready_data = json.loads(ready_msg)
+        if ready_data.get("type") == "ready":
+            print("Agent is ready!")
         
     async def send_audio(self):
         """Send audio from microphone"""
         stream = self.audio.open(
             format=FORMAT,
             channels=CHANNELS,
-            rate=RATE,
+            rate=INPUT_RATE,
             input=True,
             frames_per_buffer=CHUNK_SIZE
         )
         
-        # Signal start of audio
+        # Signal start of audio input
         await self.websocket.send("start_audio")
-        print("Recording... Press Ctrl+C to stop")
+        print("🎤 Recording... (Press Ctrl+C to stop)")
         
         try:
-            while self.is_recording:
+            while self.is_running:
                 data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
+                # Send raw PCM16 audio bytes
                 await self.websocket.send(data)
                 await asyncio.sleep(0.01)
         finally:
             stream.stop_stream()
             stream.close()
             await self.websocket.send("stop_audio")
+            print("🛑 Recording stopped")
             
-    async def receive_audio(self):
-        """Receive and play audio responses"""
-        stream = self.audio.open(
+    async def receive_messages(self):
+        """Receive audio and events from agent"""
+        # Output stream for playing audio
+        output_stream = self.audio.open(
             format=FORMAT,
             channels=CHANNELS,
-            rate=24000,  # Output is 24kHz
+            rate=OUTPUT_RATE,
             output=True
         )
         
         try:
             async for message in self.websocket:
                 if isinstance(message, bytes):
-                    # Audio data - play it
-                    stream.write(message)
+                    # Audio data (24kHz PCM16) - play it
+                    output_stream.write(message)
                 else:
-                    # JSON event - handle it
-                    data = json.loads(message)
-                    if data.get("type") == "transcript":
-                        print(f"{data['role']}: {data['content']}")
-                    elif data.get("type") == "barge_in":
-                        print("User interrupted")
+                    # JSON events
+                    try:
+                        data = json.loads(message)
+                        msg_type = data.get("type")
+                        
+                        if msg_type == "transcript":
+                            role = data.get("role", "unknown")
+                            content = data.get("content", "")
+                            print(f"💬 {role}: {content}")
+                        elif msg_type == "barge_in":
+                            print("⚡ User interrupted")
+                        elif msg_type == "tool_call":
+                            tool = data.get("tool", "unknown")
+                            print(f"🔧 Tool called: {tool}")
+                        elif msg_type == "error":
+                            print(f"❌ Error: {data.get('message')}")
+                    except json.JSONDecodeError:
+                        pass
         finally:
-            stream.stop_stream()
-            stream.close()
+            output_stream.stop_stream()
+            output_stream.close()
             
     async def run(self):
         """Run the voice client"""
         await self.connect()
-        self.is_recording = True
+        self.is_running = True
         
-        # Run send and receive concurrently
-        await asyncio.gather(
-            self.send_audio(),
-            self.receive_audio()
-        )
+        try:
+            # Run send and receive concurrently
+            await asyncio.gather(
+                self.send_audio(),
+                self.receive_messages()
+            )
+        except KeyboardInterrupt:
+            print("\\n👋 Shutting down...")
+        finally:
+            self.is_running = False
+            if self.websocket:
+                await self.websocket.close()
         
 # Usage
-client = VoiceClient()
-asyncio.run(client.run())
+if __name__ == "__main__":
+    client = VoiceClient()
+    asyncio.run(client.run())
 `
 
   const jsVoiceExample = `// Configuration
@@ -288,6 +313,7 @@ class VoiceAgent {
     this.mediaStream = null;
     this.audioQueue = [];
     this.isPlaying = false;
+    this.workletNode = null;
   }
   
   async connect() {
@@ -298,91 +324,141 @@ class VoiceAgent {
     this.ws = new WebSocket(url);
     
     this.ws.onopen = () => {
-      console.log("Connected to voice agent!");
+      console.log("✅ Connected to voice agent!");
     };
     
     this.ws.onmessage = async (event) => {
       if (event.data instanceof Blob) {
-        // Audio data - queue for playback
-        this.audioQueue.push(await event.data.arrayBuffer());
+        // Audio data (24kHz PCM16) - queue for playback
+        const arrayBuffer = await event.data.arrayBuffer();
+        this.audioQueue.push(arrayBuffer);
         this.playAudio();
       } else {
         // JSON event
-        const data = JSON.parse(event.data);
-        if (data.type === "ready") {
-          console.log("Agent ready!");
-          this.startRecording();
-        } else if (data.type === "transcript") {
-          console.log(\`\${data.role}: \${data.content}\`);
-        } else if (data.type === "barge_in") {
-          console.log("User interrupted");
-          this.audioQueue = []; // Clear audio queue
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === "ready") {
+            console.log("🎙️ Agent ready! Starting microphone...");
+            await this.startRecording();
+          } else if (data.type === "transcript") {
+            console.log(\`💬 \${data.role}: \${data.content}\`);
+          } else if (data.type === "barge_in") {
+            console.log("⚡ User interrupted - clearing audio queue");
+            this.audioQueue = []; // Clear audio queue on interruption
+          } else if (data.type === "tool_call") {
+            console.log(\`🔧 Tool called: \${data.tool}\`);
+          } else if (data.type === "error") {
+            console.error(\`❌ Error: \${data.message}\`);
+          }
+        } catch (e) {
+          console.warn("Could not parse message:", e);
         }
       }
     };
     
     this.ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
+      console.error("❌ WebSocket error:", error);
     };
     
     this.ws.onclose = () => {
-      console.log("Disconnected");
+      console.log("👋 Disconnected from voice agent");
       this.stopRecording();
     };
   }
   
   async startRecording() {
-    this.audioContext = new AudioContext({ sampleRate: 16000 });
-    this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    
-    const source = this.audioContext.createMediaStreamSource(this.mediaStream);
-    const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
-    
-    processor.onaudioprocess = (e) => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        const inputData = e.inputBuffer.getChannelData(0);
-        const pcm16 = this.float32ToPCM16(inputData);
-        this.ws.send(pcm16);
-      }
-    };
-    
-    source.connect(processor);
-    processor.connect(this.audioContext.destination);
-    
-    this.ws.send("start_audio");
-    console.log("Recording started");
+    try {
+      // Request microphone access
+      this.mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        } 
+      });
+      
+      // Create audio context at 16kHz (required by backend)
+      this.audioContext = new AudioContext({ sampleRate: 16000 });
+      const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+      
+      // Use ScriptProcessor for audio capture
+      const processor = this.audioContext.createScriptProcessor(4096, 1, 1);
+      
+      processor.onaudioprocess = (e) => {
+        if (this.ws?.readyState === WebSocket.OPEN) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const pcm16 = this.float32ToPCM16(inputData);
+          this.ws.send(pcm16);
+        }
+      };
+      
+      source.connect(processor);
+      processor.connect(this.audioContext.destination);
+      
+      // Signal audio start to backend
+      this.ws.send("start_audio");
+      console.log("🎤 Recording started");
+    } catch (error) {
+      console.error("❌ Failed to start recording:", error);
+    }
   }
   
   stopRecording() {
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream = null;
+    }
+    if (this.audioContext) {
+      this.audioContext.close();
+      this.audioContext = null;
     }
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send("stop_audio");
     }
+    console.log("🛑 Recording stopped");
   }
   
   async playAudio() {
     if (this.isPlaying || this.audioQueue.length === 0) return;
     
     this.isPlaying = true;
+    
+    // Create playback context at 24kHz (output sample rate)
     const playbackContext = new AudioContext({ sampleRate: 24000 });
     
     while (this.audioQueue.length > 0) {
-      const audioData = this.audioQueue.shift();
-      const audioBuffer = await playbackContext.decodeAudioData(audioData);
+      const pcm16Data = this.audioQueue.shift();
+      
+      // Convert PCM16 to AudioBuffer
+      const audioBuffer = await this.pcm16ToAudioBuffer(pcm16Data, playbackContext);
       
       const source = playbackContext.createBufferSource();
       source.buffer = audioBuffer;
       source.connect(playbackContext.destination);
-      source.start();
       
       await new Promise(resolve => {
         source.onended = resolve;
+        source.start();
       });
     }
     
     this.isPlaying = false;
+  }
+  
+  async pcm16ToAudioBuffer(pcm16Data, audioContext) {
+    // Convert Int16 PCM to Float32 for Web Audio API
+    const int16Array = new Int16Array(pcm16Data);
+    const float32Array = new Float32Array(int16Array.length);
+    
+    for (let i = 0; i < int16Array.length; i++) {
+      float32Array[i] = int16Array[i] / 32768.0; // Convert to [-1, 1]
+    }
+    
+    const audioBuffer = audioContext.createBuffer(1, float32Array.length, 24000);
+    audioBuffer.getChannelData(0).set(float32Array);
+    return audioBuffer;
   }
   
   float32ToPCM16(float32Array) {
@@ -395,9 +471,12 @@ class VoiceAgent {
   }
   
   disconnect() {
+    console.log("🔌 Disconnecting...");
     this.stopRecording();
     if (this.ws) {
+      this.ws.send(JSON.stringify({ type: "end" }));
       this.ws.close();
+      this.ws = null;
     }
   }
 }
@@ -406,7 +485,7 @@ class VoiceAgent {
 const voiceAgent = new VoiceAgent();
 voiceAgent.connect();
 
-// To disconnect:
+// To disconnect later:
 // voiceAgent.disconnect();
 `
 

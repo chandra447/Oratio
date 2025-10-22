@@ -1012,14 +1012,21 @@ async def voice_agent_websocket(
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                 return
             
-            validation = api_key_service.validate_api_key(
+            validation = api_key_service.validate_key_for_agent(
                 api_key=api_key,
-                required_permission=APIKeyPermission.INVOKE_AGENT
+                agent_id=agent_id
             )
             
-            if not validation.is_valid:
+            if not validation.valid:
                 await websocket.accept()
-                await websocket.send_json({"type": "error", "message": validation.error_message})
+                await websocket.send_json({"type": "error", "message": validation.reason or "Invalid API key"})
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            
+            # Check voice permission
+            if APIKeyPermission.VOICE not in validation.permissions:
+                await websocket.accept()
+                await websocket.send_json({"type": "error", "message": "API key does not have voice permission"})
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                 return
             
